@@ -64,4 +64,12 @@ jobs:
       - name: Build without local sources
         run: uv build --no-sources
       - name: Inspect artifact names
-        run: python scripts/inspect_artifacts.py
+        run: uv run python scripts/inspect_artifacts.py
+      - name: Install wheel into a clean environment
+        run: |
+          uv venv --python 3.13 /tmp/lwi-clean-env
+          uv pip install --python /tmp/lwi-clean-env/bin/python dist/*.whl
+      - name: Smoke-test installed CLI
+        run: |
+          /tmp/lwi-clean-env/bin/lwi validate examples/synthetic/comparison.yaml \
+            --profile profiles/edge-v1.yaml --json

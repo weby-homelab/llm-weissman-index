@@ -25,3 +25,13 @@ The project intentionally does not download models, call provider APIs, or
 run benchmark workloads. Reproduction is the responsibility of the measurement
 producer and must be labeled independently reproduced, self-measured,
 vendor-reported, paper-reported, model-card, derived, unverified, or synthetic.
+
+The release gate also installs the built wheel into a clean temporary
+environment and runs the installed `lwi` CLI against the synthetic fixture. This
+proves packaging and entry-point integrity, not model or serving performance.
+
+External benchmark artifacts use an explicit field map with source tool, source
+version, raw artifact digest, units, statistic definitions, and preserved
+unknown field names. LWI does not infer semantics from a similar metric name.
+If an uncertainty method is unavailable, the result reports
+`uncertainty_status: unavailable` rather than manufacturing an interval.

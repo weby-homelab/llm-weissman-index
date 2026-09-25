@@ -10,14 +10,17 @@ import yaml
 
 from .errors import InputError
 from .models import ComparisonInput, Measurement, SystemRecord
+from .performance import CACHE_STATES, SCENARIOS, OperatingEnvelope, validate_envelope_adequacy
 from .profiles import MetricDefinition, Profile
 from .provenance import provenance_issues
 from .safeio import DuplicateKeyError, load_json, load_yaml
-from .units import canonical_value, decimal_string, get_unit, parse_decimal
+from .units import canonical_value, convert, decimal_string, get_unit, parse_decimal
 
 MAX_INPUT_BYTES = 5 * 1024 * 1024
 SUPPORTED_SPEC_VERSION = "0.1"
 SUPPORTED_SCHEMA_VERSION = "1"
+EVIDENCE_TIERS = {"fixture", "smoke", "publication"}
+TAIL_STATISTICS = {"p90", "p95", "p99"}
 
 
 @dataclass(frozen=True)
@@ -115,7 +118,7 @@ def validate_comparison(comparison: ComparisonInput, profile: Profile) -> Valida
                 "$.schema_version",
             )
         )
-    _validate_workload(comparison.workload, profile, issues)
+    _validate_workload(comparison.workload, comparison.protocol, profile, issues)
     _validate_protocol(comparison.protocol, profile, issues)
     _validate_system(comparison.candidate, "candidate", profile, issues)
     _validate_system(comparison.baseline, "baseline", profile, issues)
@@ -125,11 +128,17 @@ def validate_comparison(comparison: ComparisonInput, profile: Profile) -> Valida
     _validate_provenance(comparison.baseline, "baseline", issues)
     _validate_evidence_class_consistency(comparison, issues)
     _validate_revision_bindings(comparison, issues)
+    _validate_quality_context_compatibility(comparison, issues)
+    _validate_envelope_compatibility(comparison, profile, issues)
+    _validate_publication_evidence(comparison, profile, issues)
     return ValidationReport(tuple(issues))
 
 
 def _validate_workload(
-    workload: dict[str, Any], profile: Profile, issues: list[ValidationIssue]
+    workload: dict[str, Any],
+    protocol: dict[str, Any],
+    profile: Profile,
+    issues: list[ValidationIssue],
 ) -> None:
     required = {"id", "revision", "benchmark", "task"}
     _require_string_keys(workload, required, "$.workload", issues)
@@ -152,6 +161,16 @@ def _validate_workload(
                         "TOKEN_COUNT_MISSING",
                         "error",
                         f"{key} is required for performance profiles",
+                        "$.workload",
+                    )
+                )
+        for key in ("token_count_method", "tokenizer", "tokenizer_revision"):
+            if key not in workload:
+                issues.append(
+                    ValidationIssue(
+                        "WORKLOAD_TOKEN_METADATA_MISSING",
+                        "error" if protocol.get("evidence_tier") == "publication" else "warning",
+                        f"{key} is not recorded for a performance workload",
                         "$.workload",
                     )
                 )
@@ -226,6 +245,79 @@ def _validate_protocol(
                 "$.protocol",
             )
         )
+    evidence_tier = protocol.get("evidence_tier")
+    if evidence_tier is not None and (
+        not isinstance(evidence_tier, str) or evidence_tier not in EVIDENCE_TIERS
+    ):
+        issues.append(
+            ValidationIssue(
+                "INVALID_EVIDENCE_TIER",
+                "error",
+                f"unsupported evidence_tier {evidence_tier!r}",
+                "$.protocol.evidence_tier",
+            )
+        )
+    if profile.mode != "parameter":
+        scenario = protocol.get("scenario")
+        if scenario is None:
+            issues.append(
+                ValidationIssue(
+                    "SCENARIO_MISSING",
+                    "error" if evidence_tier == "publication" else "warning",
+                    "performance protocol must declare offline, open_loop, or closed_loop",
+                    "$.protocol.scenario",
+                )
+            )
+        elif not isinstance(scenario, str) or scenario not in SCENARIOS:
+            issues.append(
+                ValidationIssue(
+                    "INVALID_SCENARIO",
+                    "error",
+                    "scenario must be offline, open_loop, or closed_loop",
+                    "$.protocol.scenario",
+                )
+            )
+        if "cache_state" in protocol and (
+            not isinstance(protocol["cache_state"], str)
+            or protocol["cache_state"] not in CACHE_STATES
+        ):
+            issues.append(
+                ValidationIssue(
+                    "INVALID_CACHE_STATE",
+                    "error",
+                    "cache_state must be cold, warm, controlled, or unknown",
+                    "$.protocol.cache_state",
+                )
+            )
+        if evidence_tier == "publication" and scenario == "open_loop":
+            _require_positive_protocol_field("target_request_rate", protocol, issues)
+            _require_protocol_field("arrival_process", protocol, issues)
+        if evidence_tier == "publication" and scenario == "closed_loop":
+            _require_positive_protocol_field("target_concurrency", protocol, issues)
+        percentile_policy = protocol.get("percentile_min_samples")
+        if percentile_policy is not None:
+            if not isinstance(percentile_policy, dict):
+                issues.append(
+                    ValidationIssue(
+                        "INVALID_PERCENTILE_POLICY",
+                        "error",
+                        "percentile_min_samples must be an object",
+                        "$.protocol.percentile_min_samples",
+                    )
+                )
+            else:
+                for statistic, minimum in percentile_policy.items():
+                    if statistic not in TAIL_STATISTICS or (
+                        isinstance(minimum, bool) or not isinstance(minimum, int) or minimum < 1
+                    ):
+                        issues.append(
+                            ValidationIssue(
+                                "INVALID_PERCENTILE_POLICY",
+                                "error",
+                                "percentile policy keys/values are invalid",
+                                "$.protocol.percentile_min_samples",
+                            )
+                        )
 
 
 def _validate_system(
@@ -270,6 +362,8 @@ def _validate_system(
                 ValidationIssue(code, severity, message, f"$.{label}.provenance[{record_index}]")
             )
     _validate_parameter_claims(system, label, issues, strict=profile.mode == "parameter")
+    _validate_identity_bindings(system, label, issues)
+    _validate_operating_envelope(system, label, profile, issues)
 
 
 def _validate_environment(
@@ -315,6 +409,22 @@ def _validate_environment(
                         f"$.{label}.environment",
                     )
                 )
+    protocol_cache_state = comparison.protocol.get("cache_state")
+    if isinstance(protocol_cache_state, str) and protocol_cache_state in CACHE_STATES:
+        for label in ("candidate", "baseline"):
+            environment_cache_state = comparison.measurement_environment[label].get("cache_state")
+            if (
+                environment_cache_state is not None
+                and environment_cache_state != protocol_cache_state
+            ):
+                issues.append(
+                    ValidationIssue(
+                        "PROTOCOL_ENVIRONMENT_MISMATCH",
+                        "error",
+                        f"{label} cache_state disagrees with protocol",
+                        f"$.measurement_environment.{label}",
+                    )
+                )
 
 
 def _validate_metric_sets(
@@ -323,7 +433,13 @@ def _validate_metric_sets(
     quality_ids = set(profile.quality_by_id)
     for label, system in (("candidate", comparison.candidate), ("baseline", comparison.baseline)):
         observed_quality = [item.metric_id for item in system.quality]
-        duplicates = sorted({item for item in observed_quality if observed_quality.count(item) > 1})
+        seen: set[str] = set()
+        duplicates: set[str] = set()
+        for item in observed_quality:
+            if item in seen:
+                duplicates.add(item)
+            seen.add(item)
+        duplicates = sorted(duplicates)
         if duplicates:
             issues.append(
                 ValidationIssue(
@@ -686,6 +802,27 @@ def _validate_sampling(
                 path,
             )
         )
+    if measurement.statistic in TAIL_STATISTICS:
+        policy = protocol.get("percentile_min_samples")
+        minimum = policy.get(measurement.statistic) if isinstance(policy, dict) else None
+        if minimum is None:
+            issues.append(
+                ValidationIssue(
+                    "PERCENTILE_ADEQUACY_UNSPECIFIED",
+                    "warning",
+                    f"no protocol adequacy rule is declared for {measurement.statistic}",
+                    path,
+                )
+            )
+        elif measurement.sample_count is not None and measurement.sample_count < minimum:
+            issues.append(
+                ValidationIssue(
+                    "TAIL_PERCENTILE_INSUFFICIENT",
+                    "warning",
+                    f"{measurement.statistic} has fewer than {minimum} samples",
+                    path,
+                )
+            )
 
 
 def _validate_evidence_class_consistency(
@@ -717,3 +854,274 @@ def _require_string_keys(
                     path,
                 )
             )
+
+
+def _require_positive_protocol_field(
+    name: str, protocol: dict[str, Any], issues: list[ValidationIssue]
+) -> None:
+    value = protocol.get(name)
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        valid = False
+    else:
+        try:
+            valid = parse_decimal(value, field=f"$.protocol.{name}") > 0
+        except InputError:
+            valid = False
+    if not valid:
+        issues.append(
+            ValidationIssue(
+                "PROTOCOL_FIELD_INVALID",
+                "error",
+                f"{name} must be a positive numeric value",
+                f"$.protocol.{name}",
+            )
+        )
+
+
+def _require_protocol_field(
+    name: str, protocol: dict[str, Any], issues: list[ValidationIssue]
+) -> None:
+    if not isinstance(protocol.get(name), str) or not protocol[name].strip():
+        issues.append(
+            ValidationIssue(
+                "PROTOCOL_FIELD_MISSING",
+                "error",
+                f"{name} is required for the selected scenario",
+                "$.protocol",
+            )
+        )
+
+
+def _validate_identity_bindings(
+    system: SystemRecord, label: str, issues: list[ValidationIssue]
+) -> None:
+    artifact = system.model_artifact
+    if artifact is None:
+        return
+    for context_name, context in (
+        ("quality_context", system.quality_context),
+        ("execution_system", system.execution_system),
+    ):
+        if context is None:
+            continue
+        for key in ("artifact_revision", "quantization", "dtype"):
+            if key in context and key in artifact and context[key] != artifact[key]:
+                issues.append(
+                    ValidationIssue(
+                        "ARTIFACT_CONTEXT_MISMATCH",
+                        "error",
+                        f"{context_name}.{key} disagrees with model_artifact",
+                        f"$.{label}.{context_name}",
+                    )
+                )
+
+
+def _validate_operating_envelope(
+    system: SystemRecord, label: str, profile: Profile, issues: list[ValidationIssue]
+) -> None:
+    if system.operating_envelope is None:
+        return
+    try:
+        envelope = OperatingEnvelope.from_dict(
+            system.operating_envelope, path=f"$.{label}.operating_envelope"
+        )
+    except InputError as exc:
+        issues.append(ValidationIssue(exc.code, "error", str(exc), exc.path or f"$.{label}"))
+        return
+    for warning_code in validate_envelope_adequacy(envelope):
+        severity = (
+            "error"
+            if profile.mode != "parameter"
+            and warning_code == "OPERATING_ENVELOPE_NO_OBSERVED_POINTS"
+            else "warning"
+        )
+        issues.append(
+            ValidationIssue(
+                warning_code,
+                severity,
+                "operating envelope evidence is not sufficient for default observed-point analysis",
+                f"$.{label}.operating_envelope",
+            )
+        )
+
+
+def _slo_signature(envelope: OperatingEnvelope) -> set[str]:
+    """Canonical SLO thresholds across observed goodput points (seconds)."""
+
+    signatures: set[str] = set()
+    for point in envelope.observed_points:
+        if point.goodput is None or point.goodput_slo is None:
+            continue
+        parts = []
+        for name in sorted(point.goodput_slo.thresholds):
+            threshold = point.goodput_slo.thresholds[name]
+            seconds = convert(threshold.value, threshold.unit, "s")
+            parts.append(f"{name}={decimal_string(seconds)}s")
+        signatures.add("|".join(parts))
+    return signatures
+
+
+def _parse_envelope(system: SystemRecord, label: str) -> OperatingEnvelope | None:
+    if system.operating_envelope is None:
+        return None
+    try:
+        return OperatingEnvelope.from_dict(
+            system.operating_envelope, path=f"$.{label}.operating_envelope"
+        )
+    except InputError:
+        return None
+
+
+def _validate_quality_context_compatibility(
+    comparison: ComparisonInput, issues: list[ValidationIssue]
+) -> None:
+    candidate = comparison.candidate.quality_context
+    baseline = comparison.baseline.quality_context
+    if candidate is not None and baseline is not None and candidate != baseline:
+        issues.append(
+            ValidationIssue(
+                "QUALITY_CONTEXT_MISMATCH",
+                "error",
+                "candidate and baseline quality contexts differ; "
+                "prompt/task/scorer conditions are not the same evaluation",
+                "$.quality_context",
+            )
+        )
+
+
+def _validate_envelope_compatibility(
+    comparison: ComparisonInput, profile: Profile, issues: list[ValidationIssue]
+) -> None:
+    candidate = _parse_envelope(comparison.candidate, "candidate")
+    baseline = _parse_envelope(comparison.baseline, "baseline")
+    evidence_tier = comparison.protocol.get("evidence_tier")
+    if (
+        profile.mode != "parameter"
+        and evidence_tier == "publication"
+        and (candidate is None or baseline is None)
+    ):
+        issues.append(
+            ValidationIssue(
+                "OPERATING_ENVELOPE_MISSING",
+                "error",
+                "publication performance records need an operating envelope "
+                "for candidate and baseline",
+                "$.operating_envelope",
+            )
+        )
+        return
+    if candidate is None or baseline is None:
+        return
+    if candidate.scenario != baseline.scenario:
+        issues.append(
+            ValidationIssue(
+                "SCENARIO_MISMATCH",
+                "error",
+                "candidate and baseline envelopes use different scenarios",
+                "$.operating_envelope",
+            )
+        )
+    protocol_scenario = comparison.protocol.get("scenario")
+    if isinstance(protocol_scenario, str) and candidate.scenario != protocol_scenario:
+        issues.append(
+            ValidationIssue(
+                "ENVELOPE_PROTOCOL_MISMATCH",
+                "error",
+                "operating envelope scenario disagrees with protocol scenario",
+                "$.operating_envelope",
+            )
+        )
+    for label, envelope in (("candidate", candidate), ("baseline", baseline)):
+        if envelope.protocol_id != comparison.protocol.get("id") or str(
+            envelope.protocol_version
+        ) != str(comparison.protocol.get("version")):
+            issues.append(
+                ValidationIssue(
+                    "ENVELOPE_PROTOCOL_MISMATCH",
+                    "error",
+                    f"{label} envelope protocol disagrees with top-level protocol",
+                    f"$.{label}.operating_envelope",
+                )
+            )
+        for point in envelope.points:
+            if point.workload.get("id") != comparison.workload.get("id") or point.workload.get(
+                "revision"
+            ) != comparison.workload.get("revision"):
+                issues.append(
+                    ValidationIssue(
+                        "ENVELOPE_WORKLOAD_MISMATCH",
+                        "error",
+                        f"{label} envelope point {point.point_id!r} disagrees "
+                        "with top-level workload identity",
+                        f"$.{label}.operating_envelope",
+                    )
+                )
+                break
+    if (candidate.protocol_id, candidate.protocol_version) != (
+        baseline.protocol_id,
+        baseline.protocol_version,
+    ):
+        issues.append(
+            ValidationIssue(
+                "ENVELOPE_PROTOCOL_MISMATCH",
+                "error",
+                "candidate and baseline envelopes use different protocols",
+                "$.operating_envelope",
+            )
+        )
+    slo_signatures = _slo_signature(candidate) | _slo_signature(baseline)
+    if len(slo_signatures) > 1:
+        issues.append(
+            ValidationIssue(
+                "GOODPUT_SLO_MISMATCH",
+                "error",
+                "goodput SLO thresholds differ; goodput values are not comparable",
+                "$.operating_envelope",
+            )
+        )
+    cache_states = {
+        point.cache_state for point in (*candidate.observed_points, *baseline.observed_points)
+    }
+    if len(cache_states) > 1:
+        issues.append(
+            ValidationIssue(
+                "CACHE_CONTEXT_MIXED"
+                if evidence_tier != "publication"
+                else "CACHE_CONTEXT_MISMATCH",
+                "warning" if evidence_tier != "publication" else "error",
+                "observed points mix cache states; goodput/latency are not comparable",
+                "$.operating_envelope",
+            )
+        )
+
+
+def _validate_publication_evidence(
+    comparison: ComparisonInput, profile: Profile, issues: list[ValidationIssue]
+) -> None:
+    del profile
+    if comparison.protocol.get("evidence_tier") != "publication":
+        return
+    for label, system in (
+        ("candidate", comparison.candidate),
+        ("baseline", comparison.baseline),
+    ):
+        if system.model_artifact is None:
+            issues.append(
+                ValidationIssue(
+                    "MODEL_ARTIFACT_MISSING",
+                    "error",
+                    f"{label} publication record needs an explicit model artifact",
+                    f"$.{label}.model_artifact",
+                )
+            )
+        for index, record in enumerate(system.provenance):
+            if record.evidence_class not in {"self_measured", "independent_reproduced"}:
+                issues.append(
+                    ValidationIssue(
+                        "PUBLICATION_EVIDENCE_CLASS",
+                        "error",
+                        f"{label} publication record needs measured evidence, "
+                        f"got {record.evidence_class!r}",
+                        f"$.{label}.provenance[{index}]",
+                    )
+                )

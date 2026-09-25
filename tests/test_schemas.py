@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import jsonschema
+import pytest
 import yaml
 
 from llm_weissman.models import ComparisonInput
@@ -17,6 +18,7 @@ def test_machine_readable_schemas_are_valid_json_with_version_contracts() -> Non
     paths = sorted(schema_dir.glob("*.schema.json"))
     assert {path.name for path in paths} == {
         "comparison.schema.json",
+        "live-benchmark.schema.json",
         "measurement.schema.json",
         "profile.schema.json",
         "result.schema.json",
@@ -58,3 +60,14 @@ def test_runtime_result_validates_against_result_schema() -> None:
     jsonschema.validate(
         evaluation_document(evaluation, comparison, load_profile("edge-v1")), schema
     )
+
+
+def test_measurement_schema_rejects_nonfinite_decimal_strings() -> None:
+    schema = json.loads(
+        (Path(__file__).parents[1] / "schemas" / "measurement.schema.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate({"value": "NaN", "unit": "count", "statistic": "point"}, schema)
+    jsonschema.validate({"value": "1e-3", "unit": "count", "statistic": "point"}, schema)

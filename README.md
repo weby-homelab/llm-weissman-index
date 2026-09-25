@@ -164,6 +164,18 @@ ratios, quality utilities, retention, gate margin, warnings, evidence classes,
 measurement digests, and the result digest. Human output is rounded for
 readability; JSON retains Decimal strings and never rounds intermediate ratios.
 
+Eligible results also expose a log-space contribution ledger: each dimension
+reports its ratio, weight, and `weight * ln(ratio)`, followed by the sum. This is
+an audit aid, not an additional score. `uncertainty_status` is `unavailable`
+when the preserved observations do not support a defensible interval.
+
+Performance evidence is explicit rather than a generic `throughput` context.
+Use `offline`, `open_loop`, or `closed_loop` scenarios and preserve observed
+`OperatingPoint`/`OperatingEnvelope` records. `TTFT`, `TPOT`, `ITL`, queue, and
+E2E latency are separate semantics. Goodput is derived only from request traces
+and an explicit SLO; failures, retries, cache state, token shape, and client
+headroom remain visible. Interpolated points are never default score inputs.
+
 Scalar LWI is a convenience layer. When multiple eligible records share one
 context, `lwi pareto FILE... --profile PROFILE` exposes reusable raw-dimension
 dominance flags. It refuses incompatible contexts.
@@ -182,6 +194,13 @@ See [`docs/reproducibility.md`](docs/reproducibility.md),
 [`docs/security-model.md`](docs/security-model.md), and
 [`docs/threats-to-validity.md`](docs/threats-to-validity.md) before treating a
 number as evidence.
+
+The repository has no live load generator. `LiveBenchmarkPolicy` and
+`schemas/live-benchmark.schema.json` are default-deny declarative preflight
+contracts only. They cannot execute a shell command, Python expression, or
+network request. External artifacts use explicit field mappings with source
+tool/version and raw artifact digests; similar metric names are not semantic
+proof.
 
 ## Prior art and independence
 

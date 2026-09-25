@@ -20,6 +20,16 @@
   `pull_request_target`, and no release/publish job.
 - OpenCode project permissions deny secret file reads, ask for shell by default,
   and use edit-deny read-only review agents.
+- Live benchmark policy is declarative and default-deny: no shell command,
+  Python expression, module import, environment dump, or credential value can
+  be supplied by a benchmark input. Activation requires an exact HTTPS
+  allowlist and bounded rate, concurrency, request, duration, timeout,
+  error-rate, and optional cost caps.
+- Reports redact credential-like mapping keys, camelCase variants, URL userinfo,
+  query tokens, and terminal control characters at the output boundary.
+- Normal CI uses no provider secrets, GPU, live endpoint, or paid judge. Actions
+  are pinned to full commit SHAs, workflow permissions are read-only, and the
+  build installs the wheel into a clean environment before its CLI smoke test.
 
 ## Residual risks
 
@@ -28,3 +38,7 @@ that a benchmark was uncontaminated, or that a provider model did not drift
 between requests. It also cannot prevent a maintainer from selecting a
 flattering workload/profile. Those are documented validity threats and require
 review, preregistration, raw evidence, and context-bound reporting.
+
+The repository does not claim MLPerf compliance, contamination-free evaluation,
+or independently reproduced GLiNER measurements. Those claims require the
+applicable upstream protocol and preserved evidence outside this package.

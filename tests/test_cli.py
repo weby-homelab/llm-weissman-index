@@ -49,6 +49,28 @@ def test_context_preserves_legitimate_token_counts_and_baseline_binding() -> Non
     assert payload["baseline"]["measurement_digest"].startswith("sha256:")
 
 
+def test_validate_wrong_typed_scenario_is_structured_error(tmp_path) -> None:
+    import yaml
+
+    data = yaml.safe_load(SYNTHETIC.read_text(encoding="utf-8"))
+    data["protocol"]["scenario"] = ["open_loop"]
+    path = tmp_path / "bad-scenario.yaml"
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+    completed = _run("validate", str(path), "--profile", str(EDGE_PROFILE), "--json")
+    assert completed.returncode == 1, completed.stderr
+    payload = json.loads(completed.stdout)
+    assert payload["valid"] is False
+    assert any(error["code"] == "INVALID_SCENARIO" for error in payload["errors"])
+
+
+def test_context_without_json_flag_is_human_readable() -> None:
+    completed = _run("context", str(SYNTHETIC), "--profile", str(EDGE_PROFILE))
+    assert completed.returncode == 0, completed.stderr
+    assert "comparison context ID:" in completed.stdout
+    assert completed.stdout.lstrip().startswith("comparison context ID:")
+    assert not completed.stdout.lstrip().startswith("{")
+
+
 def test_gliner_case_study_is_not_leaderboard_eligible() -> None:
     completed = _run("compute", str(GLINER), "--profile", str(PARAM_PROFILE), "--json")
     assert completed.returncode == 3

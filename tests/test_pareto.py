@@ -50,3 +50,32 @@ def test_incompatible_contexts_are_rejected() -> None:
     )
     with pytest.raises(InputError, match="contexts"):
         pareto_dominated([_point("a", "1", "0.9"), other])
+
+
+@pytest.mark.parametrize("value", [Decimal("NaN"), Decimal("Infinity")])
+def test_nonfinite_pareto_values_are_rejected(value: Decimal) -> None:
+    point = ParetoPoint(
+        "bad",
+        "sha256:context",
+        {"latency": value},
+        {"latency": "lower_is_better"},
+    )
+    with pytest.raises(InputError, match="finite|decimal"):
+        pareto_dominated([point])
+
+
+def test_invalid_direction_is_rejected_even_for_singleton() -> None:
+    point = ParetoPoint(
+        "bad",
+        "sha256:context",
+        {"latency": Decimal("1")},
+        {"latency": "unknown"},
+    )
+    with pytest.raises(InputError, match="direction"):
+        pareto_dominated([point])
+
+
+def test_empty_pareto_dimensions_are_rejected() -> None:
+    point = ParetoPoint("empty", "sha256:context", {}, {})
+    with pytest.raises(InputError, match="dimension"):
+        pareto_dominated([point])

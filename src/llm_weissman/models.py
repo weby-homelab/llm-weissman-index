@@ -14,24 +14,41 @@ from .units import decimal_string, get_unit, parse_decimal
 
 _SENSITIVE_QUERY_NAMES = {
     "access_token",
+    "access_key",
     "api_key",
     "apikey",
     "auth",
+    "client_secret",
     "key",
     "password",
+    "private_key",
     "secret",
     "sig",
     "signature",
     "token",
 }
+_CONTROL_CHARACTERS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def _normalise_key(value: str) -> str:
+    snake_case = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", value)
+    return snake_case.replace("-", "_").lower()
+
+
+def _escape_control_characters(value: str) -> str:
+    return _CONTROL_CHARACTERS.sub(
+        lambda match: f"\\x{ord(match.group(0)):02x}",
+        value,
+    )
 
 
 def _redact_text(value: str) -> str:
-    return re.sub(
+    redacted = re.sub(
         r"(?i)(bearer\s+|(?:[a-z0-9_-]*(?:api[_-]?key|token|secret|password|auth|signature|sig)[a-z0-9_-]*)\s*[=:]\s*)[^\s,;&]+",
         r"\1[REDACTED]",
         value,
     )
+    return _escape_control_characters(redacted)
 
 
 def _redact_url(value: str) -> str:
@@ -62,25 +79,30 @@ def _redact_url(value: str) -> str:
                 for key, item in parse_qsl(parsed.query, keep_blank_values=True)
             ]
         )
+        # Tokens embedded as key=value segments in the URL path are not
+        # query parameters, but they leak the same way; redact them too.
+        safe_path = _redact_text(parsed.path)
         return urlunsplit(
-            (parsed.scheme, netloc, parsed.path, query, _redact_text(unquote(parsed.fragment)))
+            (parsed.scheme, netloc, safe_path, query, _redact_text(unquote(parsed.fragment)))
         )
     except ValueError:
         return "[REDACTED_INVALID_URL]"
 
 
 def _redact_source(value: str) -> str:
-    return _redact_url(value) if value.startswith(("http://", "https://")) else _redact_text(value)
+    return (
+        _redact_url(value)
+        if value.strip().lower().startswith(("http://", "https://"))
+        else _redact_text(value)
+    )
 
 
 def redact_untrusted(value: Any) -> Any:
     """Redact credential-like mapping keys and text before report/digest output."""
 
     sensitive_names = _SENSITIVE_QUERY_NAMES | {
-        "client_secret",
         "credential",
         "credentials",
-        "private_key",
         "refresh_token",
     }
     legitimate_token_fields = {
@@ -92,7 +114,7 @@ def redact_untrusted(value: Any) -> Any:
     }
 
     def sensitive_key(key: str) -> bool:
-        lowered = key.lower().replace("-", "_")
+        lowered = _normalise_key(key)
         if lowered in legitimate_token_fields:
             return False
         if lowered in sensitive_names:
@@ -111,7 +133,7 @@ def redact_untrusted(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return [redact_untrusted(item) for item in value]
     if isinstance(value, str):
-        return _redact_text(value)
+        return _redact_source(value)
     return value
 
 
@@ -124,6 +146,12 @@ def _require_mapping(value: Any, *, path: str) -> dict[str, Any]:
 def _require_string(value: Any, *, field: str, path: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise InputError(f"{field} must be a non-empty string", code="REQUIRED_FIELD", path=path)
+    if _CONTROL_CHARACTERS.search(value):
+        raise InputError(
+            f"{field} contains control characters",
+            code="CONTROL_CHARACTER",
+            path=path,
+        )
     return value
 
 
@@ -139,6 +167,92 @@ def _check_keys(data: Mapping[str, Any], allowed: set[str], *, path: str) -> Non
         raise InputError(
             f"unexpected fields: {', '.join(unexpected)}", code="UNEXPECTED_FIELD", path=path
         )
+
+
+_MODEL_ARTIFACT_KEYS = {
+    "artifact_id",
+    "revision",
+    "weights_digest",
+    "adapter_revision",
+    "quantization",
+    "dtype",
+    "tokenizer",
+    "tokenizer_revision",
+}
+_QUALITY_CONTEXT_KEYS = {
+    "dataset",
+    "dataset_revision",
+    "split",
+    "task_revision",
+    "prompt_digest",
+    "system_prompt_digest",
+    "chat_template",
+    "chat_template_revision",
+    "few_shot_count",
+    "few_shot_seed",
+    "scorer",
+    "scorer_version",
+    "judge_provider",
+    "judge_model",
+    "judge_revision",
+    "judge_prompt_digest",
+    "judge_temperature",
+    "judge_seed",
+    "grading_epoch_count",
+    "artifact_revision",
+    "dtype",
+    "quantization",
+}
+_EXECUTION_SYSTEM_KEYS = {
+    "runtime",
+    "runtime_version",
+    "hardware",
+    "device_count",
+    "parallelism",
+    "serving_config_digest",
+    "cache_policy",
+    "artifact_revision",
+    "dtype",
+    "quantization",
+}
+_IDENTITY_INTEGER_KEYS = {"few_shot_count", "few_shot_seed", "judge_seed", "grading_epoch_count"}
+_IDENTITY_BOOLEAN_KEYS: set[str] = set()
+
+
+def _optional_identity(
+    value: Any,
+    *,
+    path: str,
+    allowed: set[str],
+    required: set[str] = frozenset(),
+) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    data = _require_mapping(value, path=path)
+    _check_keys(data, allowed, path=path)
+    missing = sorted(required - set(data))
+    if missing:
+        raise InputError(
+            f"missing identity fields: {', '.join(missing)}",
+            code="REQUIRED_FIELD",
+            path=path,
+        )
+    for name, item in data.items():
+        if name in _IDENTITY_INTEGER_KEYS:
+            if isinstance(item, bool) or not isinstance(item, int) or item < 0:
+                raise InputError(
+                    f"{name} must be a non-negative integer",
+                    code="WRONG_TYPE",
+                    path=f"{path}.{name}",
+                )
+        elif name in _IDENTITY_BOOLEAN_KEYS:
+            if not isinstance(item, bool):
+                raise InputError(
+                    f"{name} must be a boolean", code="WRONG_TYPE", path=f"{path}.{name}"
+                )
+        else:
+            _require_string(item, field=name, path=f"{path}.{name}")
+    return dict(data)
 
 
 @dataclass(frozen=True)
@@ -185,6 +299,8 @@ class Measurement:
         seed = data.get("seed")
         if seed is not None and (isinstance(seed, bool) or not isinstance(seed, int)):
             raise InputError("seed must be an integer", code="WRONG_TYPE", path=f"{path}.seed")
+        if seed is not None and seed < 0:
+            raise InputError("seed must be non-negative", code="INVALID_SEED", path=f"{path}.seed")
         unit = _require_string(data.get("unit"), field="unit", path=f"{path}.unit")
         get_unit(unit)
         parsed_value = parse_decimal(data.get("value"), field=f"{path}.value")
@@ -435,6 +551,10 @@ class CostMetadata:
     retry_count: int
     failed_request_count: int
     successful_task_count: int
+    timed_out_request_count: int = 0
+    attempted_request_count: int | None = None
+    currency: str | None = None
+    total_charge: Decimal | None = None
 
     @classmethod
     def from_dict(cls, value: Any, *, path: str) -> CostMetadata:
@@ -451,6 +571,10 @@ class CostMetadata:
                 "retry_count",
                 "failed_request_count",
                 "successful_task_count",
+                "timed_out_request_count",
+                "attempted_request_count",
+                "currency",
+                "total_charge",
             },
             path=path,
         )
@@ -470,6 +594,18 @@ class CostMetadata:
                     f"{name} must be a non-negative integer", code="WRONG_TYPE", path=path
                 )
             fields[name] = item
+        for name in ("timed_out_request_count", "attempted_request_count"):
+            item = data.get(name, 0 if name == "timed_out_request_count" else None)
+            if item is not None and (
+                isinstance(item, bool) or not isinstance(item, int) or item < 0
+            ):
+                raise InputError(
+                    f"{name} must be a non-negative integer",
+                    code="WRONG_TYPE",
+                    path=path,
+                )
+            if item is not None:
+                fields[name] = item
         if fields["successful_task_count"] < 1:
             raise InputError(
                 "successful_task_count must be positive",
@@ -497,6 +633,44 @@ class CostMetadata:
                 code="INVALID_COST_METADATA",
                 path=path,
             )
+        if fields["cached_token_count"] > fields["input_token_count"]:
+            raise InputError(
+                "cached_token_count cannot exceed input_token_count",
+                code="INVALID_COST_METADATA",
+                path=path,
+            )
+        if fields["timed_out_request_count"] > fields["failed_request_count"]:
+            raise InputError(
+                "timed_out_request_count cannot exceed failed_request_count",
+                code="INVALID_COST_METADATA",
+                path=path,
+            )
+        if (
+            fields["failed_request_count"] + fields["successful_task_count"]
+            != fields["request_count"]
+        ):
+            raise InputError(
+                "successful and failed requests must account for request_count",
+                code="INVALID_COST_METADATA",
+                path=path,
+            )
+        attempted = fields.get("attempted_request_count")
+        if attempted is not None and attempted < fields["request_count"] + fields["retry_count"]:
+            raise InputError(
+                "attempted_request_count cannot omit retries",
+                code="INVALID_COST_METADATA",
+                path=path,
+            )
+        currency = _optional_string(data.get("currency"), field="currency", path=path)
+        total_charge = (
+            parse_decimal(data["total_charge"], field=f"{path}.total_charge")
+            if data.get("total_charge") is not None
+            else None
+        )
+        if total_charge is not None and currency is None:
+            raise InputError(
+                "total_charge requires currency", code="INVALID_COST_METADATA", path=path
+            )
         return cls(
             pricing_timestamp=_require_string(
                 data.get("pricing_timestamp"), field="pricing_timestamp", path=path
@@ -505,10 +679,12 @@ class CostMetadata:
                 data.get("pricing_source"), field="pricing_source", path=path
             ),
             **fields,
+            currency=currency,
+            total_charge=total_charge,
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        result = {
             "pricing_timestamp": self.pricing_timestamp,
             "pricing_source": _redact_url(self.pricing_source)
             if self.pricing_source.startswith(("http://", "https://"))
@@ -520,7 +696,15 @@ class CostMetadata:
             "retry_count": self.retry_count,
             "failed_request_count": self.failed_request_count,
             "successful_task_count": self.successful_task_count,
+            "timed_out_request_count": self.timed_out_request_count,
         }
+        if self.attempted_request_count is not None:
+            result["attempted_request_count"] = self.attempted_request_count
+        if self.currency is not None:
+            result["currency"] = _redact_text(self.currency)
+        if self.total_charge is not None:
+            result["total_charge"] = decimal_string(self.total_charge)
+        return result
 
 
 @dataclass(frozen=True)
@@ -535,6 +719,10 @@ class SystemRecord:
     provenance: tuple[ProvenanceRecord, ...]
     environment: Mapping[str, Any]
     cost_metadata: CostMetadata | None
+    model_artifact: Mapping[str, Any] | None = None
+    quality_context: Mapping[str, Any] | None = None
+    execution_system: Mapping[str, Any] | None = None
+    operating_envelope: Mapping[str, Any] | None = None
     provider: str | None = None
     model_id: str | None = None
     snapshot: str | None = None
@@ -558,6 +746,10 @@ class SystemRecord:
                 "environment",
                 "cost_metadata",
                 "metadata",
+                "model_artifact",
+                "quality_context",
+                "execution_system",
+                "operating_envelope",
             },
             path=path,
         )
@@ -568,14 +760,14 @@ class SystemRecord:
             QualityObservation.from_dict(item, path=f"{path}.quality[{index}]")
             for index, item in enumerate(quality_data)
         )
-        metric_data = _require_mapping(data.get("metrics", {}), path=f"{path}.metrics")
+        metric_data = _require_mapping(data.get("metrics"), path=f"{path}.metrics")
         metrics = {
             _require_string(
                 metric_id, field="metric_id", path=f"{path}.metrics"
             ): Measurement.from_dict(observation, path=f"{path}.metrics.{metric_id}")
             for metric_id, observation in metric_data.items()
         }
-        parameter_data = _require_mapping(data.get("parameters", {}), path=f"{path}.parameters")
+        parameter_data = _require_mapping(data.get("parameters"), path=f"{path}.parameters")
         _check_keys(parameter_data, {"total", "active", "trainable", "status", "claims"}, path=path)
         parameters = {
             name: ParameterObservation.from_dict(
@@ -595,7 +787,7 @@ class SystemRecord:
             raise InputError(
                 "provenance must be a non-empty list", code="MISSING_PROVENANCE", path=path
             )
-        environment = _require_mapping(data.get("environment", {}), path=f"{path}.environment")
+        environment = _require_mapping(data.get("environment"), path=f"{path}.environment")
         metadata = data.get("metadata")
         if metadata is not None:
             metadata = _require_mapping(metadata, path=f"{path}.metadata")
@@ -623,6 +815,27 @@ class SystemRecord:
                 if data.get("cost_metadata") is not None
                 else None
             ),
+            model_artifact=_optional_identity(
+                data.get("model_artifact"),
+                path=f"{path}.model_artifact",
+                allowed=_MODEL_ARTIFACT_KEYS,
+                required={"artifact_id", "revision"},
+            ),
+            quality_context=_optional_identity(
+                data.get("quality_context"),
+                path=f"{path}.quality_context",
+                allowed=_QUALITY_CONTEXT_KEYS,
+            ),
+            execution_system=_optional_identity(
+                data.get("execution_system"),
+                path=f"{path}.execution_system",
+                allowed=_EXECUTION_SYSTEM_KEYS,
+            ),
+            operating_envelope=(
+                _require_mapping(data["operating_envelope"], path=f"{path}.operating_envelope")
+                if data.get("operating_envelope") is not None
+                else None
+            ),
             metadata=metadata,
         )
 
@@ -646,6 +859,10 @@ class SystemRecord:
                 result[name] = value
         if self.cost_metadata is not None:
             result["cost_metadata"] = self.cost_metadata.to_dict()
+        for name in ("model_artifact", "quality_context", "execution_system", "operating_envelope"):
+            value = getattr(self, name)
+            if value is not None:
+                result[name] = redact_untrusted(dict(value))
         if self.metadata is not None:
             result["metadata"] = redact_untrusted(dict(self.metadata))
         return result
@@ -681,6 +898,9 @@ class ComparisonInput:
             data.get("measurement_environment"), path="$.measurement_environment"
         )
         _check_keys(environment, {"candidate", "baseline"}, path="$.measurement_environment")
+        for name in ("candidate", "baseline", "workload", "protocol"):
+            if name not in data:
+                raise InputError(f"{name} is required", code="REQUIRED_FIELD", path=f"$.{name}")
         return cls(
             spec_version=_require_string(
                 data.get("spec_version"), field="spec_version", path="$.spec_version"

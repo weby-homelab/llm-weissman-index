@@ -19,7 +19,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["quality", "metrics"],
-      "properties": {"quality": {"type": "string"}, "metrics": {"type": "object", "additionalProperties": {"type": "string"}}}
+      "properties": {"quality": {"$ref": "#/$defs/decimal"}, "metrics": {"type": "object", "additionalProperties": {"$ref": "#/$defs/decimal"}}}
     },
     "quality": {
       "type": "array",
@@ -29,9 +29,9 @@
         "additionalProperties": false,
         "required": ["metric_id", "weight", "raw_direction", "scale_type", "raw_unit", "valid_range", "utility_transform", "utility_transform_version", "utility_floor", "utility_ceiling", "source"],
         "properties": {
-          "metric_id": {"type": "string"}, "weight": {"type": "string"}, "raw_direction": {"enum": ["higher_is_better", "lower_is_better"]},
-          "scale_type": {"type": "string"}, "raw_unit": {"type": "string"}, "valid_range": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "string"}},
-          "utility_transform": {"type": "string"}, "utility_transform_version": {"type": "string"}, "utility_floor": {"type": "string"}, "utility_ceiling": {"type": "string"}, "source": {"type": "string"}
+          "metric_id": {"type": "string"}, "weight": {"$ref": "#/$defs/decimal"}, "raw_direction": {"enum": ["higher_is_better", "lower_is_better"]},
+          "scale_type": {"type": "string"}, "raw_unit": {"type": "string"}, "valid_range": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"$ref": "#/$defs/decimal"}},
+          "utility_transform": {"type": "string"}, "utility_transform_version": {"type": "string"}, "utility_floor": {"$ref": "#/$defs/decimal"}, "utility_ceiling": {"$ref": "#/$defs/decimal"}, "source": {"type": "string"}
         }
       }
     },
@@ -43,16 +43,19 @@
         "additionalProperties": false,
         "required": ["metric_id", "weight", "direction", "dimension", "canonical_unit", "statistic", "source"],
         "properties": {
-          "metric_id": {"type": "string"}, "weight": {"type": "string"}, "direction": {"enum": ["higher_is_better", "lower_is_better"]},
+          "metric_id": {"type": "string"}, "weight": {"$ref": "#/$defs/decimal"}, "direction": {"enum": ["higher_is_better", "lower_is_better"]},
           "dimension": {"type": "string"}, "canonical_unit": {"type": "string"}, "statistic": {"type": "string"}, "source": {"type": "string"}, "parameter_semantics": {"type": "string"}
         }
       }
     },
-    "quality_gate": {"type": "object", "additionalProperties": false, "required": ["minimum_retention"], "properties": {"minimum_retention": {"type": "string"}}},
+    "quality_gate": {"type": "object", "additionalProperties": false, "required": ["minimum_retention"], "properties": {"minimum_retention": {"$ref": "#/$defs/decimal"}}},
     "environment_comparison_keys": {"type": "array", "items": {"type": "string"}},
     "valid_workload_assumptions": {"type": "array", "items": {"type": "string"}},
     "known_correlations": {"type": "array", "items": {"type": "string"}},
     "known_exclusions": {"type": "array", "items": {"type": "string"}},
     "mode": {"enum": ["parameter", "edge", "api"]}
+  },
+  "$defs": {
+    "decimal": {"type": "string", "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$"}
   }
 }

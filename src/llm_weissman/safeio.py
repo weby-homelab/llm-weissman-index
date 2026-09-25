@@ -11,6 +11,8 @@ MAX_NODES = 100_000
 MAX_DEPTH = 50
 MAX_STRING_LENGTH = 1_000_000
 MAX_TEXT_LENGTH = 5 * 1024 * 1024
+MAX_YAML_EVENTS = 200_000
+MAX_YAML_ALIASES = 1_024
 
 
 class DuplicateKeyError(ValueError):
@@ -67,6 +69,14 @@ def load_json(text: str) -> Any:
 def load_yaml(text: str) -> Any:
     if len(text.encode("utf-8")) > MAX_TEXT_LENGTH:
         raise ValueError("input text is too large")
+    aliases = 0
+    for event_count, event in enumerate(yaml.parse(text), start=1):
+        if event_count > MAX_YAML_EVENTS:
+            raise ValueError("input contains too many YAML events")
+        if isinstance(event, yaml.events.AliasEvent):
+            aliases += 1
+            if aliases > MAX_YAML_ALIASES:
+                raise ValueError("input contains too many YAML aliases")
     return enforce_bounds(yaml.load(text, Loader=_UniqueSafeLoader))
 
 

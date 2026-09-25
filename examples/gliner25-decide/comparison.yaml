@@ -60,6 +60,7 @@ candidate:
       model_revision: released-checkpoint
       benchmark_revision: fast-decisions-blog-as-retrieved-2026-09-25
       notes: "Blog reports 60.1%, 340M, and vendor latency figures; no baseline latency is manufactured."
+  environment: {}
 baseline:
   id: SemIf (Qwen3.5-4B comparison row)
   revision: unavailable-comparison-row

@@ -37,6 +37,22 @@ def evaluation_document(
                 "candidate": _parameter_metadata(comparison.candidate),
                 "baseline": _parameter_metadata(comparison.baseline),
             },
+            "model_artifacts": {
+                "candidate": redact_untrusted(dict(comparison.candidate.model_artifact or {})),
+                "baseline": redact_untrusted(dict(comparison.baseline.model_artifact or {})),
+            },
+            "quality_contexts": {
+                "candidate": redact_untrusted(dict(comparison.candidate.quality_context or {})),
+                "baseline": redact_untrusted(dict(comparison.baseline.quality_context or {})),
+            },
+            "execution_systems": {
+                "candidate": redact_untrusted(dict(comparison.candidate.execution_system or {})),
+                "baseline": redact_untrusted(dict(comparison.baseline.execution_system or {})),
+            },
+            "operating_envelopes": {
+                "candidate": redact_untrusted(dict(comparison.candidate.operating_envelope or {})),
+                "baseline": redact_untrusted(dict(comparison.baseline.operating_envelope or {})),
+            },
             "profile_policy": redact_untrusted(profile.canonical_dict),
             "pareto_dominated": None,
         }
@@ -49,21 +65,36 @@ def render_json(document: dict[str, Any]) -> str:
 
 
 def render_report(evaluation: Evaluation, comparison: ComparisonInput, profile: Profile) -> str:
+    candidate_id = redact_untrusted(comparison.candidate.id)
+    candidate_revision = redact_untrusted(comparison.candidate.revision)
+    baseline_id = redact_untrusted(comparison.baseline.id)
+    baseline_revision = redact_untrusted(comparison.baseline.revision)
+    candidate_provider = redact_untrusted(comparison.candidate.provider)
+    candidate_model_id = redact_untrusted(comparison.candidate.model_id)
+    candidate_snapshot = redact_untrusted(comparison.candidate.snapshot)
+    baseline_provider = redact_untrusted(comparison.baseline.provider)
+    baseline_model_id = redact_untrusted(comparison.baseline.model_id)
+    baseline_snapshot = redact_untrusted(comparison.baseline.snapshot)
+    workload_id = redact_untrusted(comparison.workload.get("id"))
+    workload_revision = redact_untrusted(comparison.workload.get("revision"))
+    benchmark_revision = redact_untrusted(comparison.workload.get("benchmark_revision"))
+    protocol_id = redact_untrusted(comparison.protocol.get("id"))
+    protocol_version = redact_untrusted(comparison.protocol.get("version"))
     lines = [
         "LLM Weissman Index report",
-        f"candidate: {comparison.candidate.id} ({comparison.candidate.revision})",
-        f"baseline: {comparison.baseline.id} ({comparison.baseline.revision})",
-        f"candidate provider/model: {comparison.candidate.provider} / "
-        f"{comparison.candidate.model_id} @ {comparison.candidate.snapshot}",
-        f"baseline provider/model: {comparison.baseline.provider} / "
-        f"{comparison.baseline.model_id} @ {comparison.baseline.snapshot}",
-        f"workload: {comparison.workload.get('id')} @ {comparison.workload.get('revision')}",
-        f"benchmark revision: {comparison.workload.get('benchmark_revision')}",
-        f"protocol: {comparison.protocol.get('id')} v{comparison.protocol.get('version')}",
+        f"candidate: {candidate_id} ({candidate_revision})",
+        f"baseline: {baseline_id} ({baseline_revision})",
+        f"candidate provider/model: {candidate_provider} / "
+        f"{candidate_model_id} @ {candidate_snapshot}",
+        f"baseline provider/model: {baseline_provider} / {baseline_model_id} @ {baseline_snapshot}",
+        f"workload: {workload_id} @ {workload_revision}",
+        f"benchmark revision: {benchmark_revision}",
+        f"protocol: {protocol_id} v{protocol_version}",
         f"profile: {profile.profile_id} v{profile.version}",
         f"profile digest: {profile.digest}",
         f"comparison context ID: {evaluation.context_id}",
         f"status: {evaluation.status}",
+        f"uncertainty status: {evaluation.uncertainty_status}",
     ]
     if evaluation.reason:
         lines.append(f"reason: {evaluation.reason}")
@@ -100,6 +131,19 @@ def render_report(evaluation: Evaluation, comparison: ComparisonInput, profile: 
             lines.append(f"  {metric_id}: {_human_decimal(ratio)}")
     else:
         lines.append("  unavailable")
+    lines.append("")
+    lines.append("Log-space contributions")
+    if evaluation.contributions:
+        for dimension, values in sorted(evaluation.contributions.items()):
+            lines.append(
+                f"  {dimension}: ratio {_human_decimal(values['ratio'])}; "
+                f"weight {_human_decimal(values['weight'])}; "
+                f"weight*ln(ratio) {_human_decimal(values['log_contribution'])}"
+            )
+        lines.append(
+            f"  sum: {_human_decimal(evaluation.log_contribution_sum)} "
+            "(equals ln(LWI/100) when the score is finite)"
+        )
     if comparison.candidate.parameters or comparison.baseline.parameters:
         lines.append("")
         lines.append("Parameter metadata")

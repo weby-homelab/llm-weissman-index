@@ -59,6 +59,9 @@ class Evaluation:
     resource_ratios: dict[str, Decimal]
     raw_metrics: dict[str, dict[str, Any]]
     quality_gate: dict[str, Any]
+    contributions: dict[str, dict[str, Any]]
+    log_contribution_sum: Decimal | None
+    uncertainty_status: str
     measurement_digests: dict[str, str]
     workload: dict[str, Any]
     protocol: dict[str, Any]
@@ -73,20 +76,24 @@ class Evaluation:
             "schema_version": self.schema_version,
             "status": self.status,
             "reason": self.reason,
-            "candidate": {
-                "id": self.candidate_id,
-                "revision": self.candidate_revision,
-                "provider": self.candidate_provider,
-                "model_id": self.candidate_model_id,
-                "snapshot": self.candidate_snapshot,
-            },
-            "baseline": {
-                "id": self.baseline_id,
-                "revision": self.baseline_revision,
-                "provider": self.baseline_provider,
-                "model_id": self.baseline_model_id,
-                "snapshot": self.baseline_snapshot,
-            },
+            "candidate": redact_untrusted(
+                {
+                    "id": self.candidate_id,
+                    "revision": self.candidate_revision,
+                    "provider": self.candidate_provider,
+                    "model_id": self.candidate_model_id,
+                    "snapshot": self.candidate_snapshot,
+                }
+            ),
+            "baseline": redact_untrusted(
+                {
+                    "id": self.baseline_id,
+                    "revision": self.baseline_revision,
+                    "provider": self.baseline_provider,
+                    "model_id": self.baseline_model_id,
+                    "snapshot": self.baseline_snapshot,
+                }
+            ),
             "profile": {
                 "id": self.profile_id,
                 "version": self.profile_version,
@@ -98,13 +105,20 @@ class Evaluation:
             "resource_ratios": {
                 key: decimal_string(value) for key, value in self.resource_ratios.items()
             },
-            "raw_metrics": self.raw_metrics,
-            "quality_gate": self.quality_gate,
+            "raw_metrics": redact_untrusted(self.raw_metrics),
+            "quality_gate": redact_untrusted(self.quality_gate),
+            "contributions": _serialize_contributions(self.contributions),
+            "log_contribution_sum": (
+                decimal_string(self.log_contribution_sum)
+                if self.log_contribution_sum is not None
+                else None
+            ),
+            "uncertainty_status": self.uncertainty_status,
             "measurement_digests": self.measurement_digests,
-            "workload": self.workload,
-            "protocol": self.protocol,
-            "measurement_environment": self.measurement_environment,
-            "profile_policy": self.profile_policy,
+            "workload": redact_untrusted(self.workload),
+            "protocol": redact_untrusted(self.protocol),
+            "measurement_environment": redact_untrusted(self.measurement_environment),
+            "profile_policy": redact_untrusted(self.profile_policy),
             "warnings": [issue.to_dict() for issue in self.issues if issue.severity == "warning"],
             "errors": [issue.to_dict() for issue in self.issues if issue.severity == "error"],
             "result_digest": self.result_digest,
@@ -136,6 +150,13 @@ def comparison_context_id(
             "baseline measurement digest does not match input",
             code="BASELINE_DIGEST_MISMATCH",
         )
+    candidate_quality_context = dict(comparison.candidate.quality_context or {})
+    baseline_quality_context = dict(comparison.baseline.quality_context or {})
+    shared_quality_context = (
+        redact_untrusted(baseline_quality_context)
+        if candidate_quality_context == baseline_quality_context
+        else None
+    )
     payload = {
         "spec_version": comparison.spec_version,
         "schema_version": comparison.schema_version,
@@ -153,6 +174,7 @@ def comparison_context_id(
             "snapshot": comparison.baseline.snapshot,
         },
         "baseline_measurement_digest": baseline_measurement_digest or actual_baseline_digest,
+        "shared_quality_context": shared_quality_context,
         "quality_transforms": [item.to_dict() for item in profile.quality],
         "metric_definitions": [item.to_dict() for item in profile.metrics],
     }
@@ -180,9 +202,12 @@ def evaluate(comparison: ComparisonInput, profile: Profile) -> Evaluation:
     quality: QualityResult | None = None
     resource_ratios: dict[str, Decimal] = {}
     raw_metrics: dict[str, dict[str, Any]] = {}
+    contributions: dict[str, dict[str, Any]] = {}
+    log_contribution_sum: Decimal | None = None
     lwi: Decimal | None = None
     status = "eligible"
     reason: str | None = None
+    uncertainty_status = _uncertainty_status(comparison)
 
     if not report.errors:
         try:
@@ -194,6 +219,11 @@ def evaluate(comparison: ComparisonInput, profile: Profile) -> Evaluation:
             quality_gate["margin"] = decimal_string(margin)
             quality_gate["passed"] = quality.retention >= profile.quality_gate.minimum_retention
             resource_ratios, raw_metrics = _resource_ratios(comparison, profile)
+            contributions = _log_contributions(quality, resource_ratios, profile)
+            if all(item["log_contribution"] is not None for item in contributions.values()):
+                log_contribution_sum = sum(
+                    item["log_contribution"] for item in contributions.values()
+                )
         except InputError as exc:
             issues.append(ValidationIssue(exc.code, "error", str(exc), "$.score"))
     if any(issue.severity == "error" for issue in issues):
@@ -231,6 +261,11 @@ def evaluate(comparison: ComparisonInput, profile: Profile) -> Evaluation:
         "resource_ratios": {key: decimal_string(value) for key, value in resource_ratios.items()},
         "raw_metrics": raw_metrics,
         "quality_gate": quality_gate,
+        "contributions": _serialize_contributions(contributions),
+        "log_contribution_sum": (
+            decimal_string(log_contribution_sum) if log_contribution_sum is not None else None
+        ),
+        "uncertainty_status": uncertainty_status,
         "issues": [issue.to_dict() for issue in issues],
         "measurement_digests": measurement_digests,
         "spec_version": comparison.spec_version,
@@ -269,6 +304,9 @@ def evaluate(comparison: ComparisonInput, profile: Profile) -> Evaluation:
         resource_ratios=resource_ratios,
         raw_metrics=raw_metrics,
         quality_gate=quality_gate,
+        contributions=contributions,
+        log_contribution_sum=log_contribution_sum,
+        uncertainty_status=uncertainty_status,
         measurement_digests=measurement_digests,
         workload=redact_untrusted(dict(comparison.workload)),
         protocol=redact_untrusted(dict(comparison.protocol)),
@@ -328,16 +366,16 @@ def _resource_ratios(
             raw_metrics[definition.metric_id]["parameter_semantics"] = (
                 definition.parameter_semantics
             )
-            raw_metrics[definition.metric_id]["candidate_parameter_source"] = (
+            raw_metrics[definition.metric_id]["candidate_parameter_source"] = redact_untrusted(
                 candidate_parameter.source
             )
-            raw_metrics[definition.metric_id]["baseline_parameter_source"] = (
+            raw_metrics[definition.metric_id]["baseline_parameter_source"] = redact_untrusted(
                 baseline_parameter.source
             )
-            raw_metrics[definition.metric_id]["candidate_parameter_method"] = (
+            raw_metrics[definition.metric_id]["candidate_parameter_method"] = redact_untrusted(
                 candidate_parameter.method
             )
-            raw_metrics[definition.metric_id]["baseline_parameter_method"] = (
+            raw_metrics[definition.metric_id]["baseline_parameter_method"] = redact_untrusted(
                 baseline_parameter.method
             )
             raw_metrics[definition.metric_id]["candidate_parameter_status"] = (
@@ -347,6 +385,56 @@ def _resource_ratios(
                 comparison.baseline.parameter_status
             )
     return ratios, raw_metrics
+
+
+def _log_contributions(
+    quality: QualityResult, resource_ratios: dict[str, Decimal], profile: Profile
+) -> dict[str, dict[str, Any]]:
+    contributions: dict[str, dict[str, Any]] = {}
+    dimensions = {
+        "quality": (quality.quality_ratio, profile.quality_weight),
+        **{
+            metric_id: (resource_ratios[metric_id], weight)
+            for metric_id, weight in profile.resource_weights.items()
+        },
+    }
+    with localcontext() as context:
+        context.prec = DECIMAL_WORKING_PRECISION
+        for dimension, (ratio, weight) in dimensions.items():
+            log_contribution = None if ratio <= 0 else weight * ratio.ln()
+            contributions[dimension] = {
+                "ratio": ratio,
+                "weight": weight,
+                "log_contribution": log_contribution,
+            }
+    return contributions
+
+
+def _serialize_contributions(
+    contributions: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, str | None]]:
+    return {
+        dimension: {
+            key: decimal_string(value) if isinstance(value, Decimal) else value
+            for key, value in values.items()
+        }
+        for dimension, values in sorted(contributions.items())
+    }
+
+
+def _uncertainty_status(comparison: ComparisonInput) -> str:
+    measurements = [item.raw for item in comparison.candidate.quality]
+    measurements.extend(item.raw for item in comparison.baseline.quality)
+    measurements.extend(comparison.candidate.metrics.values())
+    measurements.extend(comparison.baseline.metrics.values())
+    if measurements and all(
+        measurement.confidence_level is not None
+        and measurement.lower_bound is not None
+        and measurement.upper_bound is not None
+        for measurement in measurements
+    ):
+        return "available"
+    return "unavailable"
 
 
 def _metric_measurement(system: SystemRecord, definition: MetricDefinition) -> Measurement | None:

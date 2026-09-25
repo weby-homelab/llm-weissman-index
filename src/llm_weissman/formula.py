@@ -34,7 +34,10 @@ def weighted_geometric_ratio(
 ) -> Decimal:
     if set(ratios) != set(weights):
         raise InputError("ratio and weight dimensions differ", code="METRIC_SET_MISMATCH")
-    validate_weights(weights)
+    parsed_weights = {
+        name: parse_decimal(weight, field=f"weight[{name}]") for name, weight in weights.items()
+    }
+    validate_weights(parsed_weights)
     with localcontext() as context:
         context.prec = DECIMAL_WORKING_PRECISION
         logarithm = Decimal("0")
@@ -42,7 +45,7 @@ def weighted_geometric_ratio(
             value = parse_decimal(ratio, field=f"ratio[{name}]")
             if value <= 0:
                 raise InputError(f"ratio {name!r} must be positive", code="NONPOSITIVE_RATIO")
-            logarithm += weights[name] * value.ln()
+            logarithm += parsed_weights[name] * value.ln()
         return logarithm.exp()
 
 

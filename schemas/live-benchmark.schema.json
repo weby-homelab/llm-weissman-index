@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/weby-homelab/llm-weissman-index/blob/main/schemas/live-benchmark.schema.json",
+  "title": "LWI Live Benchmark Safety Policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "policy_version",
+    "enabled",
+    "activation_mode",
+    "target_allowlist",
+    "authorization_statement",
+    "max_concurrency",
+    "max_request_rate",
+    "max_total_requests",
+    "max_duration_seconds",
+    "timeout_seconds",
+    "abort_error_rate"
+  ],
+  "properties": {
+    "policy_version": {"type": "string", "minLength": 1},
+    "enabled": {"type": "boolean"},
+    "activation_mode": {"const": "explicit"},
+    "target_allowlist": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "format": "uri",
+        "pattern": "^https://",
+        "not": {"pattern": "^https://[^/]*@"}
+      }
+    },
+    "authorization_statement": {"type": "string", "minLength": 1},
+    "max_concurrency": {"type": "integer", "minimum": 1},
+    "max_request_rate": {"$ref": "#/$defs/positive_decimal"},
+    "max_total_requests": {"type": "integer", "minimum": 1},
+    "max_duration_seconds": {"$ref": "#/$defs/positive_decimal"},
+    "timeout_seconds": {"$ref": "#/$defs/positive_decimal"},
+    "abort_error_rate": {"$ref": "#/$defs/decimal"},
+    "max_estimated_cost": {"$ref": "#/$defs/positive_decimal"},
+    "currency": {"type": "string", "minLength": 1}
+  },
+  "allOf": [
+    {
+      "if": {"required": ["max_estimated_cost"]},
+      "then": {"required": ["currency"]}
+    }
+  ],
+  "$defs": {
+    "decimal": {
+      "type": "string",
+      "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$"
+    },
+    "positive_decimal": {
+      "type": "string",
+      "pattern": "^(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]*[1-9][0-9]*)(?:[eE][+-]?[0-9]+)?$"
+    }
+  }
+}

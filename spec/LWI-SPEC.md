@@ -157,6 +157,43 @@ Measured records can preserve raw-log/config/environment digests, code commit,
 sample count, confidence level, interval bounds, method, and seed. v0.1 does
 not propagate aggregate confidence intervals; it must not invent them.
 
+## Identity and performance evidence
+
+An evidence record may declare separate model-artifact, quality-context, and
+execution-system identities. Quality context includes dataset/task/prompt/
+scorer/judge semantics; execution system includes runtime/hardware/parallelism/
+serving/cache semantics. If a declared quality artifact and performance artifact
+disagree on revision, dtype, or quantization, validation returns
+`ARTIFACT_CONTEXT_MISMATCH` rather than presenting one deployment score.
+Candidate and baseline quality contexts must also be identical when both are
+declared (`QUALITY_CONTEXT_MISMATCH`); the comparison context carries only the
+shared quality context, while candidate-specific artifact and measurement data
+stay in measurement/result digests so Pareto can compare candidates within one
+baseline-bound context.
+
+Performance protocols declare `offline`, `open_loop`, or `closed_loop` when they
+claim publication evidence. Operating envelopes contain observed points with
+load target/achieved load, duration, outcome counts, cache state, latency
+semantics, workload identity, client headroom, and provenance. Adequacy is
+versioned by the protocol; there is no universal point-count invariant.
+Interpolated/derived points are retained as such and do not enter default
+observed-point scoring.
+
+Goodput is a derived request rate from preserved traces and an explicit SLO. The
+SLO is part of the comparison context, so goodput under different thresholds is
+not directly comparable. Failed, timed-out, and retried requests remain in the
+accounting denominator. TTFT, TPOT, ITL, queue latency, and E2E latency are
+different metric semantics and must not be silently mapped to one another.
+
+Evidence is labeled `fixture`, `smoke`, or `publication`; the label does not
+prove honesty or contamination status. `publication` additionally requires an
+explicit model artifact, measured (`self_measured`/`independent_reproduced`)
+provenance, and — for performance profiles — an operating envelope for both
+systems that agrees with the top-level protocol/workload on scenario, protocol,
+and workload identity, with a single goodput SLO and uniform cache state.
+Live benchmark execution is outside the
+reference package and is default-deny even when a URL is present.
+
 ## Parameters and hosted APIs
 
 Total, active, and trainable parameters are separate observations with source,

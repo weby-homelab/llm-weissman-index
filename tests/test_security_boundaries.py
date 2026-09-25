@@ -152,6 +152,40 @@ def test_cost_metadata_requires_successful_task_denominator() -> None:
         )
 
 
+def test_cost_metadata_cannot_hide_cache_failures_or_retries() -> None:
+    base = {
+        "pricing_timestamp": "2026-09-25T00:00:00Z",
+        "pricing_source": "test",
+        "input_token_count": 10,
+        "output_token_count": 5,
+        "cached_token_count": 2,
+        "request_count": 2,
+        "retry_count": 1,
+        "failed_request_count": 1,
+        "successful_task_count": 1,
+        "timed_out_request_count": 1,
+        "attempted_request_count": 3,
+        "currency": "USD",
+        "total_charge": "0.50",
+    }
+    CostMetadata.from_dict(base, path="cost_metadata")
+    invalid_cases = (
+        {"cached_token_count": 11},
+        {"timed_out_request_count": 2},
+        {"successful_task_count": 2},
+        {"attempted_request_count": 2},
+    )
+    for change in invalid_cases:
+        candidate = dict(base)
+        candidate.update(change)
+        with pytest.raises(InputError, match="cost metadata|cannot|account"):
+            CostMetadata.from_dict(candidate, path="cost_metadata")
+    without_currency = dict(base)
+    without_currency.pop("currency")
+    with pytest.raises(InputError, match="currency"):
+        CostMetadata.from_dict(without_currency, path="cost_metadata")
+
+
 def test_profile_rejects_non_dimensionless_quality_units_and_unknown_versions() -> None:
     profile = load_profile("edge-v1")
     changed = dict(profile.canonical_dict)
@@ -170,6 +204,28 @@ def test_profile_rejects_non_dimensionless_quality_units_and_unknown_versions() 
     changed["quality"] = [quality]
     with pytest.raises(InputError, match="scale_type"):
         Profile.from_dict(changed)
+
+
+def test_profile_rejects_reserved_quality_dimension_id() -> None:
+    profile = load_profile("edge-v1")
+    changed = dict(profile.canonical_dict)
+    metrics = [dict(item) for item in changed["metrics"]]
+    metrics[0]["metric_id"] = "quality"
+    changed["metrics"] = metrics
+    changed["weights"] = {
+        "quality": "0.55",
+        "metrics": {"quality": "0.45", "throughput": "0.10", "peak_memory": "0.10"},
+    }
+    with pytest.raises(InputError, match="reserved"):
+        Profile.from_dict(changed)
+
+
+def test_url_path_tokens_are_redacted() -> None:
+    from llm_weissman.models import redact_untrusted
+
+    rendered = redact_untrusted({"source": "https://example.test/card/api_key=k1/next"})
+    assert "api_key=k1" not in str(rendered)
+    assert "[REDACTED]" in str(rendered)
 
 
 def test_decimal_digest_preserves_accepted_precision() -> None:

@@ -3,7 +3,7 @@ from decimal import Decimal
 import pytest
 
 from llm_weissman.errors import InputError
-from llm_weissman.formula import compute_lwi
+from llm_weissman.formula import compute_lwi, weighted_geometric_ratio
 
 
 def test_baseline_against_itself_is_100() -> None:
@@ -50,3 +50,11 @@ def test_invalid_weight_sum_is_rejected() -> None:
             Decimal("0.6"),
             {"latency": Decimal("0.6")},
         )
+
+
+def test_weighted_geometric_ratio_normalizes_string_decimal_weights() -> None:
+    result = weighted_geometric_ratio(
+        {"latency": Decimal("2"), "throughput": Decimal("1")},
+        {"latency": "0.5", "throughput": "0.5"},
+    )
+    assert abs(result - Decimal("2").sqrt()) < Decimal("1e-24")
