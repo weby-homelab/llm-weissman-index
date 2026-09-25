@@ -41,6 +41,77 @@ uv run pytest
 uv build --no-sources
 ```
 
+## Architecture at a glance
+
+The reference path is intentionally auditable: evidence enters through a
+bounded parser, policy and comparability guards run before mathematics, and
+every report carries the identities needed to reproduce its context.
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Inter, ui-sans-serif, system-ui", "primaryColor": "#FFF4D6", "primaryTextColor": "#172033", "primaryBorderColor": "#F59E0B", "lineColor": "#64748B", "secondaryColor": "#E0F2FE", "tertiaryColor": "#FCE7F3", "clusterBkg": "#F8FAFC", "clusterBorder": "#CBD5E1"}}}%%
+flowchart LR
+    subgraph EVIDENCE["01 · Evidence & workload"]
+        SRC["Benchmark / model sources"]
+        RECORDS["Candidate + baseline records"]
+        PROTOCOL["Protocol + environment"]
+    end
+
+    INPUT["YAML / JSON comparison"]
+    SAFE["Bounded safe loader\nstrict fields · no execution"]
+
+    subgraph GUARDS["02 · Comparability guards"]
+        VALIDATE["Semantic validation"]
+        UNITS["Typed units + statistics"]
+        PROVENANCE["Provenance + uncertainty"]
+        CONTEXT["comparison_context_id"]
+    end
+
+    subgraph KERNEL["03 · Policy & kernel"]
+        PROFILE["Immutable profile\nweights · transforms · gate"]
+        QUALITY["Quality utility\nRQ geometric aggregate"]
+        RATIOS["Resource ratios\nlower / higher is better"]
+        LWI["LWI = 100 × exp(Σ w · ln R)"]
+    end
+
+    subgraph OUTPUTS["04 · Auditable outputs"]
+        REPORT["CLI report / JSON"]
+        PARETO["Context-bound Pareto"]
+        DIGESTS["Measurement · profile · result digests"]
+        ARTIFACTS["Wheel · sdist · SBOM · CI"]
+    end
+
+    SRC --> RECORDS
+    RECORDS --> INPUT
+    PROTOCOL --> INPUT
+    INPUT --> SAFE --> VALIDATE
+    VALIDATE --> UNITS
+    VALIDATE --> PROVENANCE
+    VALIDATE --> CONTEXT
+    PROFILE --> QUALITY
+    PROFILE --> RATIOS
+    CONTEXT --> LWI
+    QUALITY --> LWI
+    RATIOS --> LWI
+    LWI --> REPORT
+    LWI --> PARETO
+    CONTEXT --> DIGESTS
+    LWI --> DIGESTS
+    REPORT --> ARTIFACTS
+    DIGESTS --> ARTIFACTS
+
+    classDef source fill:#E0F2FE,stroke:#0284C7,color:#082F49,stroke-width:2px;
+    classDef guard fill:#FEE2E2,stroke:#DC2626,color:#450A0A,stroke-width:2px;
+    classDef policy fill:#FEF3C7,stroke:#D97706,color:#451A03,stroke-width:2px;
+    classDef kernel fill:#DCFCE7,stroke:#16A34A,color:#052E16,stroke-width:2px;
+    classDef output fill:#FCE7F3,stroke:#DB2777,color:#500724,stroke-width:2px;
+
+    class SRC,RECORDS,PROTOCOL,INPUT source;
+    class SAFE,VALIDATE,UNITS,PROVENANCE,CONTEXT guard;
+    class PROFILE,QUALITY,RATIOS policy;
+    class LWI kernel;
+    class REPORT,PARETO,DIGESTS,ARTIFACTS output;
+```
+
 ## Formula
 
 For each quality task, LWI first maps the raw score to a documented positive
