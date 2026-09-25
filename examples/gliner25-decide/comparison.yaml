@@ -1,0 +1,118 @@
+spec_version: "0.1"
+schema_version: "1"
+candidate:
+  id: fastino/GLiNER2.5-Decide
+  revision: 7ee5da4c2415e32259bcdc0b1a7367c32ce8d6f6
+  provider: Fastino
+  model_id: fastino/GLiNER2.5-Decide
+  snapshot: 7ee5da4c2415e32259bcdc0b1a7367c32ce8d6f6
+  quality:
+    - metric_id: task_accuracy
+      raw:
+        value: "0.602"
+        unit: "1"
+        statistic: mean
+        sample_count: 5100
+        method: reported_exact_match_average
+  metrics: {}
+  parameters:
+    status: disputed
+    total:
+      value: "486444053"
+      unit: count
+      statistic: point
+      semantics: total
+      source: Hugging Face model API safetensors parameter metadata
+      method: metadata_reported
+    claims:
+      - claim_id: fastino-model-card
+        value: "340000000"
+        unit: count
+        semantics: total
+        source: https://huggingface.co/fastino/GLiNER2.5-Decide
+        source_title: "fastino/GLiNER2.5-Decide model card"
+        claim: "The 340M English classification model"
+      - claim_id: huggingface-safetensors-metadata
+        value: "486444053"
+        unit: count
+        semantics: total
+        source: https://huggingface.co/api/models/fastino/GLiNER2.5-Decide
+        source_title: "Hugging Face model API metadata"
+        claim: "F32 parameter metadata total"
+  provenance:
+    - evidence_class: model_card
+      source_type: Hugging Face model card
+      claim_scope: model identity, license, benchmark table, parameter label
+      retrieved_at: "2026-09-25T14:15:00Z"
+      source_url: https://huggingface.co/fastino/GLiNER2.5-Decide
+      source_title: "fastino/GLiNER2.5-Decide model card"
+      source_date: "2026-09-24"
+      model_revision: 7ee5da4c2415e32259bcdc0b1a7367c32ce8d6f6
+      benchmark_revision: fast-decisions-card-as-retrieved-2026-09-25
+      notes: "Model card reports 60.2% and 340M; disputed claims are preserved."
+    - evidence_class: vendor_reported
+      source_type: Fastino blog
+      claim_scope: benchmark, latency, hardware, parameter label
+      retrieved_at: "2026-09-25T14:15:00Z"
+      source_url: https://fastino.ai/blog/gliner-2-5-decide-open-weight-decision-model
+      source_title: "GLiNER2.5-Decide: An Open-Weight Model for Structured Decision Making"
+      source_date: "2026-09-24"
+      model_revision: released-checkpoint
+      benchmark_revision: fast-decisions-blog-as-retrieved-2026-09-25
+      notes: "Blog reports 60.1%, 340M, and vendor latency figures; no baseline latency is manufactured."
+baseline:
+  id: SemIf (Qwen3.5-4B comparison row)
+  revision: unavailable-comparison-row
+  provider: Qwen comparison row
+  model_id: Qwen/Qwen3.5-4B-Base
+  snapshot: unavailable
+  quality:
+    - metric_id: task_accuracy
+      raw:
+        value: "0.564"
+        unit: "1"
+        statistic: mean
+        sample_count: 5100
+        method: reported_comparison_row
+  metrics: {}
+  parameters:
+    status: reported
+    total:
+      value: "4000000000"
+      unit: count
+      statistic: point
+      semantics: total
+      source: Qwen model card
+      method: reported_model_overview
+    claims: []
+  provenance:
+    - evidence_class: model_card
+      source_type: Hugging Face model card
+      claim_scope: comparison model parameter semantics
+      retrieved_at: "2026-09-25T14:15:00Z"
+      source_url: https://huggingface.co/Qwen/Qwen3.5-4B-Base
+      source_title: "Qwen/Qwen3.5-4B-Base model card"
+      source_date: "2026-02"
+      model_revision: unavailable-comparison-row
+      benchmark_revision: fast-decisions-card-as-retrieved-2026-09-25
+      notes: "The 4B model overview is not a reproduced SemIf checkpoint parameter measurement."
+  environment: {}
+workload:
+  id: fast-decisions
+  revision: dataset-card-as-retrieved-2026-09-25
+  benchmark: Fast Decisions
+  benchmark_revision: fast-decisions-card-as-retrieved-2026-09-25
+  dataset: fastino/fast-decisions
+  split: held-out benchmark described in model card
+  task: English schema-defined classification
+protocol:
+  id: vendor-reported-model-card-protocol
+  version: unavailable
+  measurement_statistic: mean
+  warmup_policy: unavailable
+  repeat_count: 1
+  batch_size: 1
+  concurrency: 1
+measurement_environment:
+  candidate: {}
+  baseline: {}

@@ -1,0 +1,140 @@
+spec_version: "0.1"
+schema_version: "1"
+candidate:
+  id: synthetic-candidate
+  revision: synthetic-2026-09-25-candidate
+  quality:
+    - metric_id: task_accuracy
+      raw:
+        value: "0.96"
+        unit: "1"
+        statistic: mean
+        sample_count: 1000
+        method: deterministic-fixture
+        seed: 7
+  metrics:
+    latency:
+      value: "250"
+      unit: ms
+      statistic: p50
+      sample_count: 100
+      method: deterministic-fixture
+      seed: 7
+    throughput:
+      value: "80"
+      unit: tokens/s
+      statistic: mean
+      sample_count: 100
+      method: deterministic-fixture
+      seed: 7
+    peak_memory:
+      value: "2"
+      unit: GiB
+      statistic: max
+      sample_count: 100
+      method: deterministic-fixture
+      seed: 7
+  parameters:
+    status: unknown
+    claims: []
+  provenance:
+    - evidence_class: synthetic
+      source_type: synthetic_fixture
+      claim_scope: example-only
+      retrieved_at: "2026-09-25T00:00:00Z"
+      notes: Synthetic values are not measured facts.
+  environment:
+    device_class: synthetic
+    runtime: lwi-reference
+baseline:
+  id: synthetic-baseline
+  revision: synthetic-2026-09-25-baseline
+  quality:
+    - metric_id: task_accuracy
+      raw:
+        value: "0.96"
+        unit: "1"
+        statistic: mean
+        sample_count: 1000
+        method: deterministic-fixture
+        seed: 7
+  metrics:
+    latency:
+      value: "0.5"
+      unit: s
+      statistic: p50
+      sample_count: 100
+      method: deterministic-fixture
+      seed: 7
+    throughput:
+      value: "40"
+      unit: tokens/s
+      statistic: mean
+      sample_count: 100
+      method: deterministic-fixture
+      seed: 7
+    peak_memory:
+      value: "4"
+      unit: GiB
+      statistic: max
+      sample_count: 100
+      method: deterministic-fixture
+      seed: 7
+  parameters:
+    status: unknown
+    claims: []
+  provenance:
+    - evidence_class: synthetic
+      source_type: synthetic_fixture
+      claim_scope: example-only
+      retrieved_at: "2026-09-25T00:00:00Z"
+      notes: Synthetic values are not measured facts.
+  environment:
+    device_class: synthetic
+    runtime: lwi-reference
+workload:
+  id: synthetic-classification
+  revision: "1"
+  benchmark: synthetic-benchmark
+  benchmark_revision: synthetic-benchmark-v1
+  dataset: synthetic-dataset
+  dataset_checksum: sha256:synthetic-fixture
+  split: test
+  task: classification
+  input_token_count: 128
+  output_token_count: 16
+protocol:
+  id: synthetic-protocol
+  version: "1"
+  measurement_statistic: p50
+  warmup_policy: 10 deterministic warmups
+  repeat_count: 100
+  random_seed: 7
+  batch_size: 1
+  concurrency: 1
+  cache_state: cold
+  streaming: false
+  network_inclusion: excluded
+measurement_environment:
+  candidate:
+    device_class: synthetic
+    runtime: lwi-reference
+    runtime_version: "1"
+    dtype: fp32
+    quantization: none
+    batch_size: 1
+    concurrency: 1
+    cache_state: cold
+    network_inclusion: excluded
+    streaming: false
+  baseline:
+    device_class: synthetic
+    runtime: lwi-reference
+    runtime_version: "1"
+    dtype: fp32
+    quantization: none
+    batch_size: 1
+    concurrency: 1
+    cache_state: cold
+    network_inclusion: excluded
+    streaming: false

@@ -1,0 +1,71 @@
+spec_version: "0.1"
+profile_id: api-v1
+version: "1"
+intended_use: "Observable hosted/API workloads that do not guess hidden internals or hardware."
+policy_statement: "Normative policy; provider price and endpoint behavior are time-dependent observations."
+weights:
+  quality: "0.45"
+  metrics:
+    ttft: "0.20"
+    e2e_latency: "0.15"
+    cost_per_successful_task: "0.15"
+    throughput: "0.05"
+quality:
+  - metric_id: task_accuracy
+    weight: "1"
+    raw_direction: higher_is_better
+    scale_type: bounded_rate
+    raw_unit: "1"
+    valid_range: ["0", "1"]
+    utility_transform: identity
+    utility_transform_version: "1"
+    utility_floor: "0"
+    utility_ceiling: "1"
+    source: "LWI v0.1 policy: benchmark-defined bounded exact-match or accuracy rate."
+metrics:
+  - metric_id: ttft
+    weight: "0.20"
+    direction: lower_is_better
+    dimension: time
+    canonical_unit: s
+    statistic: p95
+    source: "Observed first-token time under the declared client/network boundary."
+  - metric_id: e2e_latency
+    weight: "0.15"
+    direction: lower_is_better
+    dimension: time
+    canonical_unit: s
+    statistic: p50
+    source: "Observed end-to-end request latency with token counts recorded."
+  - metric_id: cost_per_successful_task
+    weight: "0.15"
+    direction: lower_is_better
+    dimension: currency
+    canonical_unit: USD
+    statistic: mean
+    source: "Observed successful-task cost with pricing provenance and no silent FX conversion."
+  - metric_id: throughput
+    weight: "0.05"
+    direction: higher_is_better
+    dimension: throughput
+    canonical_unit: tokens/s
+    statistic: mean
+    source: "Observed aggregate token throughput under declared client concurrency."
+quality_gate:
+  minimum_retention: "0.95"
+environment_comparison_keys:
+  - client_region
+  - api_version
+  - batch_size
+  - concurrency
+  - cache_state
+  - network_inclusion
+  - streaming
+valid_workload_assumptions:
+  - "The provider/API revision and client protocol are recorded for every result."
+  - "Cost is measured per successful task, not copied from a headline token price."
+known_correlations:
+  - "TTFT and end-to-end latency can correlate but represent first-response and completion experience."
+known_exclusions:
+  - "Unknown parameters, provider hardware, and hidden batching are excluded rather than guessed."
+mode: api

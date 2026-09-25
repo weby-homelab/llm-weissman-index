@@ -1,0 +1,12 @@
+.git/
+.venv/
+node_modules/
+*.log
+*.env
+*.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*credentials*
+*.secret

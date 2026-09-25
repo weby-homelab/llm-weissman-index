@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/weby-homelab/llm-weissman-index/blob/main/schemas/comparison.schema.json",
+  "title": "LWI Comparison Input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["spec_version", "schema_version", "candidate", "baseline", "workload", "protocol", "measurement_environment"],
+  "properties": {
+    "spec_version": {"const": "0.1"},
+    "schema_version": {"const": "1"},
+    "candidate": {"$ref": "#/$defs/system"},
+    "baseline": {"$ref": "#/$defs/system"},
+    "workload": {"type": "object", "required": ["id", "revision", "benchmark", "benchmark_revision", "task", "dataset_checksum"], "additionalProperties": true},
+    "protocol": {
+      "type": "object",
+      "required": ["id", "version", "measurement_statistic", "warmup_policy", "repeat_count", "batch_size", "concurrency", "random_seed"],
+      "additionalProperties": true,
+      "properties": {
+        "id": {"type": "string", "minLength": 1}, "version": {"type": "string", "minLength": 1},
+        "measurement_statistic": {"type": "string", "minLength": 1}, "warmup_policy": {"type": "string", "minLength": 1},
+        "repeat_count": {"type": "integer", "minimum": 1}, "batch_size": {"type": "integer", "minimum": 1},
+        "concurrency": {"type": "integer", "minimum": 1}, "random_seed": {"type": "integer", "minimum": 0}
+      }
+    },
+    "measurement_environment": {
+      "type": "object", "additionalProperties": false, "required": ["candidate", "baseline"],
+      "properties": {"candidate": {"type": "object"}, "baseline": {"type": "object"}}
+    }
+  },
+  "$defs": {
+    "measurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "unit", "statistic"],
+      "properties": {
+        "value": {"oneOf": [{"type": "string"}, {"type": "integer"}]},
+        "unit": {"type": "string", "minLength": 1},
+        "statistic": {"type": "string", "minLength": 1},
+        "sample_count": {"type": "integer", "minimum": 1},
+        "confidence_level": {"oneOf": [{"type": "string"}, {"type": "integer"}]},
+        "lower_bound": {"oneOf": [{"type": "string"}, {"type": "integer"}]},
+        "upper_bound": {"oneOf": [{"type": "string"}, {"type": "integer"}]},
+        "method": {"type": "string"},
+        "seed": {"type": "integer", "minimum": 0}
+      }
+    },
+    "quality": {"type": "object", "additionalProperties": false, "required": ["metric_id", "raw"], "properties": {"metric_id": {"type": "string"}, "raw": {"$ref": "#/$defs/measurement"}}},
+    "provenance": {
+      "type": "object", "additionalProperties": false, "required": ["evidence_class", "source_type", "claim_scope", "retrieved_at"],
+      "properties": {"evidence_class": {"type": "string"}, "source_type": {"type": "string"}, "claim_scope": {"type": "string"}, "retrieved_at": {"type": "string"}, "source_url": {"type": "string", "format": "uri"}, "source_title": {"type": "string"}, "source_date": {"type": "string"}, "model_revision": {"type": "string"}, "benchmark_revision": {"type": "string"}, "notes": {"type": "string"}, "raw_log_digest": {"type": "string"}, "config_digest": {"type": "string"}, "environment_digest": {"type": "string"}, "code_commit_sha": {"type": "string"}}
+    },
+    "system": {
+      "type": "object", "additionalProperties": false, "required": ["id", "revision", "quality", "metrics", "parameters", "provenance", "environment"],
+      "properties": {
+        "id": {"type": "string"}, "revision": {"type": "string"}, "provider": {"type": "string"}, "model_id": {"type": "string"}, "snapshot": {"type": "string"},
+        "quality": {"type": "array", "items": {"$ref": "#/$defs/quality"}}, "metrics": {"type": "object", "additionalProperties": {"$ref": "#/$defs/measurement"}},
+        "parameters": {"type": "object"}, "provenance": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/provenance"}}, "environment": {"type": "object"}, "cost_metadata": {"$ref": "#/$defs/cost_metadata"}, "metadata": {"type": "object"}
+      }
+    },
+    "cost_metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pricing_timestamp", "pricing_source", "input_token_count", "output_token_count", "cached_token_count", "request_count", "retry_count", "failed_request_count", "successful_task_count"],
+      "properties": {
+        "pricing_timestamp": {"type": "string"}, "pricing_source": {"type": "string"},
+        "input_token_count": {"type": "integer", "minimum": 0}, "output_token_count": {"type": "integer", "minimum": 0},
+        "cached_token_count": {"type": "integer", "minimum": 0}, "request_count": {"type": "integer", "minimum": 0},
+        "retry_count": {"type": "integer", "minimum": 0}, "failed_request_count": {"type": "integer", "minimum": 0},
+        "successful_task_count": {"type": "integer", "minimum": 1}
+      }
+    }
+  }
+}

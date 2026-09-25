@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/weby-homelab/llm-weissman-index/blob/main/schemas/measurement.schema.json",
+  "title": "LWI Measurement",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["value", "unit", "statistic"],
+  "properties": {
+    "value": {"oneOf": [{"type": "string", "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$"}, {"type": "integer"}]},
+    "unit": {"type": "string", "minLength": 1},
+    "statistic": {"type": "string", "minLength": 1},
+    "sample_count": {"type": "integer", "minimum": 1},
+    "confidence_level": {"type": "string"},
+    "lower_bound": {"oneOf": [{"type": "string"}, {"type": "integer"}]},
+    "upper_bound": {"oneOf": [{"type": "string"}, {"type": "integer"}]},
+    "method": {"type": "string"},
+    "seed": {"type": "integer", "minimum": 0}
+  }
+}

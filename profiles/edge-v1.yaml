@@ -1,0 +1,66 @@
+spec_version: "0.1"
+profile_id: edge-v1
+version: "1"
+intended_use: "Local or edge inference with quality, latency, throughput, and peak memory under a matched protocol."
+policy_statement: "Normative project policy; weights intentionally encode one edge deployment use case only."
+weights:
+  quality: "0.55"
+  metrics:
+    latency: "0.25"
+    throughput: "0.10"
+    peak_memory: "0.10"
+quality:
+  - metric_id: task_accuracy
+    weight: "1"
+    raw_direction: higher_is_better
+    scale_type: bounded_rate
+    raw_unit: "1"
+    valid_range: ["0", "1"]
+    utility_transform: identity
+    utility_transform_version: "1"
+    utility_floor: "0"
+    utility_ceiling: "1"
+    source: "LWI v0.1 policy: benchmark-defined bounded exact-match or accuracy rate."
+metrics:
+  - metric_id: latency
+    weight: "0.25"
+    direction: lower_is_better
+    dimension: time
+    canonical_unit: s
+    statistic: p50
+    source: "Measured request latency under the declared protocol."
+  - metric_id: throughput
+    weight: "0.10"
+    direction: higher_is_better
+    dimension: throughput
+    canonical_unit: tokens/s
+    statistic: mean
+    source: "Measured generated-token throughput with token semantics."
+  - metric_id: peak_memory
+    weight: "0.10"
+    direction: lower_is_better
+    dimension: bytes
+    canonical_unit: B
+    statistic: max
+    source: "Measured peak memory for the declared process boundary."
+quality_gate:
+  minimum_retention: "0.95"
+environment_comparison_keys:
+  - device_class
+  - runtime
+  - runtime_version
+  - dtype
+  - quantization
+  - batch_size
+  - concurrency
+  - cache_state
+  - network_inclusion
+  - streaming
+valid_workload_assumptions:
+  - "The workload has stable input/output token semantics."
+  - "Candidate and baseline run under the same hardware/protocol comparison keys."
+known_correlations:
+  - "Latency and throughput can correlate; both represent responsiveness and capacity."
+known_exclusions:
+  - "Energy and cost are excluded because their boundary and pricing metadata are not assumed."
+mode: edge

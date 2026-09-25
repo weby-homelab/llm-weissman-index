@@ -1,0 +1,42 @@
+spec_version: "0.1"
+profile_id: param-v1
+version: "1"
+intended_use: "Parameter-normalized comparisons with quality and total parameter semantics."
+policy_statement: "Normative project policy; not a scientific constant and not a universal model ranking."
+weights:
+  quality: "0.70"
+  metrics:
+    parameters_total: "0.30"
+quality:
+  - metric_id: task_accuracy
+    weight: "1"
+    raw_direction: higher_is_better
+    scale_type: bounded_rate
+    raw_unit: "1"
+    valid_range: ["0", "1"]
+    utility_transform: identity
+    utility_transform_version: "1"
+    utility_floor: "0"
+    utility_ceiling: "1"
+    source: "LWI v0.1 policy: benchmark-defined bounded exact-match or accuracy rate."
+metrics:
+  - metric_id: parameters_total
+    weight: "0.30"
+    direction: lower_is_better
+    dimension: count
+    canonical_unit: count
+    statistic: point
+    source: "Reported or measured total parameter count with explicit semantics."
+    parameter_semantics: total
+quality_gate:
+  minimum_retention: "0.95"
+environment_comparison_keys: []
+valid_workload_assumptions:
+  - "The candidate and baseline total parameter claims are semantically comparable."
+  - "Quality is measured on the same workload."
+known_correlations:
+  - "Parameter count is not an inference-cost proxy for every architecture."
+known_exclusions:
+  - "Disputed parameter claims are not scoreable in param-v1."
+  - "Active and trainable parameters cannot substitute for total parameters."
+mode: parameter
