@@ -11,6 +11,7 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal
+from ipaddress import ip_address
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -61,6 +62,41 @@ def _keys(data: Mapping[str, Any], allowed: set[str], *, path: str) -> None:
         )
 
 
+def _validate_target(value: Any, *, path: str) -> str:
+    target = _string(value, field="target", path=path)
+    try:
+        parsed = urlsplit(target)
+        hostname = parsed.hostname
+    except ValueError as exc:
+        raise InputError(
+            "live targets must be public, credential-free HTTPS URLs",
+            code="UNSAFE_TARGET",
+            path=path,
+        ) from exc
+    normalized_hostname = (hostname or "").rstrip(".").lower()
+    private_literal = normalized_hostname == "localhost" or normalized_hostname.endswith(
+        ".localhost"
+    )
+    if not private_literal and hostname:
+        try:
+            private_literal = not ip_address(hostname).is_global
+        except ValueError:
+            pass
+    if (
+        parsed.scheme != "https"
+        or not hostname
+        or parsed.username
+        or parsed.password
+        or private_literal
+    ):
+        raise InputError(
+            "live targets must be public, credential-free HTTPS URLs",
+            code="UNSAFE_TARGET",
+            path=path,
+        )
+    return target
+
+
 @dataclass(frozen=True)
 class LiveBenchmarkPolicy:
     policy_version: str
@@ -76,6 +112,61 @@ class LiveBenchmarkPolicy:
     abort_error_rate: Decimal
     max_estimated_cost: Decimal | None = None
     currency: str | None = None
+
+    def __post_init__(self) -> None:
+        _string(self.policy_version, field="policy_version", path="$")
+        if not isinstance(self.enabled, bool):
+            raise InputError("enabled must be boolean", code="WRONG_TYPE", path="$.enabled")
+        if self.activation_mode != "explicit":
+            raise InputError(
+                "live activation_mode must be explicit",
+                code="LIVE_MODE_NOT_EXPLICIT",
+                path="$.activation_mode",
+            )
+        if not self.target_allowlist:
+            raise InputError(
+                "target_allowlist must be a non-empty list",
+                code="TARGET_ALLOWLIST_MISSING",
+                path="$.target_allowlist",
+            )
+        for index, target in enumerate(self.target_allowlist):
+            _validate_target(target, path=f"$.target_allowlist[{index}]")
+        authorization = _string(
+            self.authorization_statement,
+            field="authorization_statement",
+            path="$",
+        )
+        if self.enabled and authorization.lower() in {"", "none", "unknown", "unauthorized"}:
+            raise InputError(
+                "enabled live policy needs an authorization statement",
+                code="AUTHORIZATION_MISSING",
+                path="$.authorization_statement",
+            )
+        _integer(self.max_concurrency, field="max_concurrency", path="$")
+        _positive_decimal(self.max_request_rate, field="max_request_rate", path="$")
+        _integer(self.max_total_requests, field="max_total_requests", path="$")
+        _positive_decimal(self.max_duration_seconds, field="max_duration_seconds", path="$")
+        _positive_decimal(self.timeout_seconds, field="timeout_seconds", path="$")
+        if isinstance(self.abort_error_rate, str) and not _ABORT_ERROR_RATE_PATTERN.fullmatch(
+            self.abort_error_rate
+        ):
+            raise InputError(
+                "abort_error_rate must use a decimal representation in (0, 1]",
+                code="INVALID_LIVE_CAP",
+                path="$.abort_error_rate",
+            )
+        error_rate = parse_decimal(self.abort_error_rate, field="$.abort_error_rate")
+        if not (Decimal("0") < error_rate <= Decimal("1")):
+            raise InputError(
+                "abort_error_rate must be between 0 and 1",
+                code="INVALID_LIVE_CAP",
+                path="$.abort_error_rate",
+            )
+        if self.max_estimated_cost is not None:
+            _positive_decimal(self.max_estimated_cost, field="max_estimated_cost", path="$")
+            _string(self.currency, field="currency", path="$")
+        elif self.currency is not None:
+            _string(self.currency, field="currency", path="$")
 
     @classmethod
     def from_dict(cls, value: Any, *, path: str = "$") -> LiveBenchmarkPolicy:
@@ -118,20 +209,9 @@ class LiveBenchmarkPolicy:
             )
         normalized_targets: list[str] = []
         for index, target in enumerate(targets):
-            target = _string(target, field="target", path=f"{path}.target_allowlist[{index}]")
-            parsed = urlsplit(target)
-            if (
-                parsed.scheme != "https"
-                or not parsed.hostname
-                or parsed.username
-                or parsed.password
-            ):
-                raise InputError(
-                    "live targets must be credential-free HTTPS URLs",
-                    code="UNSAFE_TARGET",
-                    path=f"{path}.target_allowlist[{index}]",
-                )
-            normalized_targets.append(target)
+            normalized_targets.append(
+                _validate_target(target, path=f"{path}.target_allowlist[{index}]")
+            )
         raw_error_rate = data.get("abort_error_rate")
         if isinstance(raw_error_rate, str) and not _ABORT_ERROR_RATE_PATTERN.fullmatch(
             raw_error_rate

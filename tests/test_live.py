@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import replace
+from decimal import Decimal
+
 import pytest
 
 from llm_weissman.errors import InputError
@@ -39,6 +42,10 @@ def test_live_policy_rejects_non_https_or_credentialed_targets() -> None:
     for target in (
         "http://authorized.example.test/generate",
         "https://user:password@authorized.example.test/generate",
+        "https://localhost/generate",
+        "https://127.0.0.1/generate",
+        "https://[::1]/generate",
+        "https://[malformed/generate",
     ):
         with pytest.raises(InputError, match="credential-free HTTPS"):
             LiveBenchmarkPolicy.from_dict(_policy(target_allowlist=[target]))
@@ -56,6 +63,13 @@ def test_live_policy_rejects_unallowlisted_target_and_disabled_policy() -> None:
 def test_enabled_policy_needs_authorization_statement() -> None:
     with pytest.raises(InputError, match="authorization statement"):
         LiveBenchmarkPolicy.from_dict(_policy(authorization_statement="unknown"))
+
+
+def test_direct_policy_construction_cannot_bypass_abort_rate_bounds() -> None:
+    policy = LiveBenchmarkPolicy.from_dict(_policy())
+
+    with pytest.raises(InputError, match="abort_error_rate"):
+        replace(policy, abort_error_rate=Decimal("0"))
 
 
 def test_live_policy_rejects_non_explicit_activation_mode() -> None:
