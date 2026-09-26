@@ -1,8 +1,8 @@
 # Benchmark methodology research note — 2026-09-25 baseline
 
-**Repository:** `weby-homelab/llm-weissman-index`  
-**Mission baseline:** 2026-09-25  
-**Retrieval date:** 2026-09-26 UTC  
+**Repository:** `weby-homelab/llm-weissman-index`
+**Mission baseline:** 2026-09-25
+**Retrieval date:** 2026-09-26 UTC
 **Purpose:** choose evidence and safety practices for an LWI normalization and
 comparability layer, not to inflate LWI values.
 
