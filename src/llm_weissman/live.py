@@ -7,6 +7,7 @@ Python from an input file.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal
@@ -16,6 +17,8 @@ from urllib.parse import urlsplit
 from .errors import InputError
 from .models import redact_untrusted
 from .units import parse_decimal
+
+_ABORT_ERROR_RATE_PATTERN = re.compile(r"^(?:0\.(?:[0-9]*[1-9][0-9]*)|1(?:\.0+)?)$")
 
 
 def _mapping(value: Any, *, path: str) -> dict[str, Any]:
@@ -129,7 +132,16 @@ class LiveBenchmarkPolicy:
                     path=f"{path}.target_allowlist[{index}]",
                 )
             normalized_targets.append(target)
-        error_rate = parse_decimal(data.get("abort_error_rate"), field=f"{path}.abort_error_rate")
+        raw_error_rate = data.get("abort_error_rate")
+        if isinstance(raw_error_rate, str) and not _ABORT_ERROR_RATE_PATTERN.fullmatch(
+            raw_error_rate
+        ):
+            raise InputError(
+                "abort_error_rate must use a decimal representation in (0, 1]",
+                code="INVALID_LIVE_CAP",
+                path=f"{path}.abort_error_rate",
+            )
+        error_rate = parse_decimal(raw_error_rate, field=f"{path}.abort_error_rate")
         if not (Decimal("0") < error_rate <= Decimal("1")):
             raise InputError(
                 "abort_error_rate must be between 0 and 1",

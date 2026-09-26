@@ -63,6 +63,32 @@ def test_live_policy_rejects_non_explicit_activation_mode() -> None:
         LiveBenchmarkPolicy.from_dict(_policy(activation_mode="automatic"))
 
 
+@pytest.mark.parametrize(
+    ("value", "valid"),
+    [("0", False), ("-0.1", False), ("1.01", False), ("0.0001", True), ("1", True), (1, True)],
+)
+def test_abort_error_rate_schema_and_runtime_share_exact_bounds(value: object, valid: bool) -> None:
+    import json
+    from pathlib import Path
+
+    import jsonschema
+
+    schema = json.loads(
+        (Path(__file__).parents[1] / "schemas" / "live-benchmark.schema.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    policy = _policy(abort_error_rate=value)
+    if valid:
+        LiveBenchmarkPolicy.from_dict(policy)
+        jsonschema.validate(policy, schema)
+    else:
+        with pytest.raises(InputError):
+            LiveBenchmarkPolicy.from_dict(policy)
+        with pytest.raises(jsonschema.ValidationError):
+            jsonschema.validate(policy, schema)
+
+
 def test_live_schema_rejects_zero_caps_credentialed_targets_and_orphan_cost() -> None:
     import json
     from pathlib import Path
