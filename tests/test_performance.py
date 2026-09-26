@@ -109,6 +109,24 @@ def test_each_slo_or_transport_failure_is_not_goodput(
     assert result.goodput == Decimal("0")
 
 
+@pytest.mark.parametrize("latency", ["0", "-0.001"])
+def test_request_trace_rejects_nonpositive_latency(latency: str) -> None:
+    with pytest.raises(InputError, match="positive"):
+        _trace("invalid", e2e=latency)
+
+
+def test_operating_point_rejects_nonpositive_duration_and_wrong_throughput_unit() -> None:
+    invalid_duration = _point("duration")
+    invalid_duration["measurement_duration"] = _measurement("0")
+    with pytest.raises(InputError, match="positive"):
+        OperatingPoint.from_dict(invalid_duration, path="point")
+
+    invalid_throughput = _point("throughput")
+    invalid_throughput["throughput"] = _measurement("1", unit="tokens/s")
+    with pytest.raises(InputError, match="throughput/requests"):
+        OperatingPoint.from_dict(invalid_throughput, path="point")
+
+
 def test_retry_then_success_is_accounted_without_hiding_retry() -> None:
     result = compute_goodput(
         [_trace("retried", retry_count=2), _trace("plain")], Decimal("2"), _slo()

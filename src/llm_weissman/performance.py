@@ -61,6 +61,8 @@ def _dimensioned_measurement(
     path: str,
     dimension: str,
     semantic: str | None = None,
+    require_positive: bool = False,
+    require_nonnegative: bool = False,
 ) -> Measurement:
     measurement = Measurement.from_dict(value, path=path)
     unit = get_unit(measurement.unit)
@@ -69,6 +71,14 @@ def _dimensioned_measurement(
             f"measurement must use {dimension}/{semantic or 'any'} units",
             code="WRONG_METRIC_DIMENSION",
             path=path,
+        )
+    if require_positive and measurement.value <= 0:
+        raise InputError(
+            "measurement must be positive", code="INVALID_PERFORMANCE_MEASUREMENT", path=path
+        )
+    if require_nonnegative and measurement.value < 0:
+        raise InputError(
+            "measurement must be non-negative", code="INVALID_PERFORMANCE_MEASUREMENT", path=path
         )
     return measurement
 
@@ -94,6 +104,7 @@ class SLO:
                 path=f"{path}.{name}",
                 dimension="time",
                 semantic="time",
+                require_positive=True,
             )
         return cls(thresholds=thresholds)
 
@@ -131,6 +142,7 @@ class RequestTrace:
                 path=f"{path}.latency.{name}",
                 dimension="time",
                 semantic="time",
+                require_positive=True,
             )
             for name, item in latency_data.items()
         }
@@ -215,6 +227,14 @@ def compute_goodput(
     identifiers = [trace.request_id for trace in traces]
     if len(set(identifiers)) != len(identifiers):
         raise InputError("request IDs must be unique", code="DUPLICATE_REQUEST_ID", path="traces")
+    for trace_index, trace in enumerate(traces):
+        for name, latency in trace.latency.items():
+            if latency.value <= 0:
+                raise InputError(
+                    "trace latency must be positive",
+                    code="INVALID_PERFORMANCE_MEASUREMENT",
+                    path=f"traces[{trace_index}].latency.{name}",
+                )
     successful = sum(trace.success for trace in traces)
     timed_out = sum(trace.timed_out for trace in traces)
     failed = len(traces) - successful
@@ -339,6 +359,7 @@ class OperatingPoint:
                 path=f"{path}.goodput",
                 dimension="throughput",
                 semantic="requests",
+                require_nonnegative=True,
             )
             if data.get("goodput") is not None
             else None
@@ -362,6 +383,7 @@ class OperatingPoint:
                 path=f"{path}.measurement_duration",
                 dimension="time",
                 semantic="time",
+                require_positive=True,
             ),
             attempted_count=attempted,
             successful_count=successful,
@@ -378,6 +400,7 @@ class OperatingPoint:
                     path=f"{path}.load_target",
                     dimension="throughput",
                     semantic="requests",
+                    require_nonnegative=True,
                 )
                 if data.get("load_target") is not None
                 else None
@@ -388,12 +411,19 @@ class OperatingPoint:
                     path=f"{path}.achieved_load",
                     dimension="throughput",
                     semantic="requests",
+                    require_nonnegative=True,
                 )
                 if data.get("achieved_load") is not None
                 else None
             ),
             throughput=(
-                Measurement.from_dict(data["throughput"], path=f"{path}.throughput")
+                _dimensioned_measurement(
+                    data["throughput"],
+                    path=f"{path}.throughput",
+                    dimension="throughput",
+                    semantic="requests",
+                    require_nonnegative=True,
+                )
                 if data.get("throughput") is not None
                 else None
             ),
