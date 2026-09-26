@@ -21,8 +21,9 @@ smarter or better than 4B models.
 | 340M parameter label | `model_card` / `vendor_reported` | Conflicting external labels, not a measured parameter count. |
 | 486,444,053 F32 metadata parameters | `derived` | Derived from the cited Hugging Face API metadata representation; semantic equivalence to the 340M label is not assumed. |
 | Named vendor latency figures | `vendor_reported` | No matching baseline latency or independent reproduction is present. |
-| Qwen comparison-row accuracy/parameter values | `model_card` | Comparison-row provenance is incomplete for a reproducible checkpoint. |
+| Qwen comparison-row accuracy/parameter values | `disputed` / `model_card` | The row is not an independently attributable Qwen checkpoint observation; its rounded parameter label and quality value remain incomplete. |
 
-The fixture therefore keeps `parameters.status: disputed`, contains no serving
+The fixture therefore keeps both parameter claims disputed where checkpoint
+identity is unavailable, contains no serving
 metrics, and returns `incomplete` under `param-v1`. It must not be presented as
 an independently reproduced LWI score or as universal model superiority.

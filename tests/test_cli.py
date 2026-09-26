@@ -89,3 +89,8 @@ def test_gliner_case_study_is_not_leaderboard_eligible() -> None:
     assert payload["lwi"] is None
     assert any(error["code"] == "PARAMETER_CLAIM_DISPUTED" for error in payload["errors"])
     assert any(error["code"] == "PARAMETER_CLAIMS_CONFLICT" for error in payload["errors"])
+    assert payload["parameter_metadata"]["baseline"]["status"] == "disputed"
+    assert any(
+        error["code"] == "PARAMETER_CLAIM_DISPUTED" and error["path"].startswith("$.baseline")
+        for error in payload["errors"]
+    )
