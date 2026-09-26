@@ -3,7 +3,7 @@ message: "If LWI contributes to your work, cite the software and the exact relea
 title: "LLM Weissman Index"
 type: software
 version: "0.2.0"
-date-released: "2026-09-26"
+date-released: "2026-09-27"
 authors:
   - name: "Weby Homelab"
 repository-code: "https://github.com/weby-homelab/llm-weissman-index"

@@ -4,7 +4,7 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
-## [0.2.0] - 2026-09-26
+## [0.2.0] - 2026-09-27
 
 ### Added
 
@@ -22,14 +22,23 @@ All notable changes to this project are documented here.
 ### Hardened
 
 - Report-boundary redaction now covers parameter metadata, camelCase credential
-  keys, URL userinfo/query tokens, and terminal control characters.
+  keys, cookie/session/CSRF values, URL userinfo/query tokens, and terminal
+  control characters.
 - Comparison/measurement/profile schemas now share finite-decimal contracts;
   CI validates a clean wheel install and installed CLI smoke test.
 - URL-path token redaction, unhashable-enum structured errors, CLI InputError
   boundaries, and live-policy schema parity (positive caps, credential-free
   targets, cost/currency binding).
+- Live target validation normalizes trailing-dot hostnames before rejecting
+  private or loopback IP literals.
 - GLiNER2.5-Decide evidence labels and conflicting published parameter claims
   remain explicit rather than being promoted to an unsupported score.
+
+### Documentation
+
+- The README architecture diagram now presents the four-stage evidence,
+  comparison-context, analysis/eligibility, and auditable-output flow with a
+  textual equivalent for readers who do not use Mermaid.
 
 ### Security / robustness
 
