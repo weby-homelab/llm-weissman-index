@@ -194,6 +194,19 @@ def test_context_id_binds_baseline_identity_and_measurements() -> None:
     assert first.context_id != second.context_id
 
 
+def test_context_id_uses_redacted_public_baseline_identity() -> None:
+    first_data = _comparison()
+    first_data["baseline"]["model_id"] = "https://model.example/card?access_token=one"
+    second_data = _comparison()
+    second_data["baseline"]["model_id"] = "https://model.example/card?access_token=two"
+
+    profile = load_profile("edge-v1")
+    first = evaluate(parse_comparison(first_data), profile)
+    second = evaluate(parse_comparison(second_data), profile)
+
+    assert first.context_id == second.context_id
+
+
 def test_log_space_contributions_reconcile_to_final_score() -> None:
     evaluation = evaluate(parse_comparison(_comparison()), load_profile("edge-v1"))
     assert evaluation.lwi is not None
@@ -243,6 +256,17 @@ def test_quality_and_execution_artifact_mismatch_is_not_scoreable() -> None:
     evaluation = evaluate(parse_comparison(data), load_profile("edge-v1"))
     assert evaluation.status == "invalid"
     assert any(issue.code == "ARTIFACT_CONTEXT_MISMATCH" for issue in evaluation.issues)
+
+
+def test_execution_device_count_accepts_schema_integer_type() -> None:
+    data = _comparison()
+    for system in (data["candidate"], data["baseline"]):
+        system["execution_system"] = {"device_count": 1}
+
+    comparison = parse_comparison(data)
+
+    assert comparison.candidate.execution_system == {"device_count": 1}
+    assert comparison.baseline.execution_system == {"device_count": 1}
 
 
 def test_parameter_sources_and_identity_urls_are_redacted_at_result_boundary() -> None:

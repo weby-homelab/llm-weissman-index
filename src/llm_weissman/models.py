@@ -87,7 +87,7 @@ def _redact_url(value: str) -> str:
         )
         # Tokens embedded as key=value segments in the URL path are not
         # query parameters, but they leak the same way; redact them too.
-        safe_path = _redact_text(parsed.path)
+        safe_path = _redact_text(unquote(parsed.path))
         return urlunsplit(
             (parsed.scheme, netloc, safe_path, query, _redact_text(unquote(parsed.fragment)))
         )
@@ -221,7 +221,13 @@ _EXECUTION_SYSTEM_KEYS = {
     "dtype",
     "quantization",
 }
-_IDENTITY_INTEGER_KEYS = {"few_shot_count", "few_shot_seed", "judge_seed", "grading_epoch_count"}
+_IDENTITY_INTEGER_KEYS = {
+    "device_count",
+    "few_shot_count",
+    "few_shot_seed",
+    "judge_seed",
+    "grading_epoch_count",
+}
 _IDENTITY_BOOLEAN_KEYS: set[str] = set()
 
 
@@ -542,7 +548,7 @@ class ProvenanceRecord:
                 }:
                     result[name] = _redact_text(value)
                 else:
-                    result[name] = value
+                    result[name] = _redact_text(value)
         return result
 
 

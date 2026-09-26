@@ -98,6 +98,23 @@ def test_context_json_redacts_untrusted_baseline_identity(tmp_path: Path) -> Non
     assert "[REDACTED]" in completed.stdout
 
 
+def test_context_human_redacts_untrusted_baseline_identity(tmp_path: Path) -> None:
+    import yaml
+
+    data = yaml.safe_load(SYNTHETIC.read_text(encoding="utf-8"))
+    data["baseline"]["id"] = "Authorization: Basic human-context-secret"
+    data["baseline"]["revision"] = "token=human-revision-secret"
+    path = tmp_path / "human-context-secrets.yaml"
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+
+    completed = _run("context", str(path), "--profile", str(EDGE_PROFILE))
+
+    assert completed.returncode == 0, completed.stderr
+    assert "human-context-secret" not in completed.stdout
+    assert "human-revision-secret" not in completed.stdout
+    assert "[REDACTED]" in completed.stdout
+
+
 def test_gliner_case_study_is_not_leaderboard_eligible() -> None:
     completed = _run("compute", str(GLINER), "--profile", str(PARAM_PROFILE), "--json")
     assert completed.returncode == 3

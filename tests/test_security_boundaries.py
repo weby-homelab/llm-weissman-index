@@ -100,19 +100,26 @@ def test_provenance_serialization_redacts_credentials_and_query_tokens() -> None
         source_type="test",
         claim_scope="test",
         retrieved_at="2026-09-25T00:00:00Z",
-        source_url="https://user:password@example.org/card?auth_token=secret&x=ok#access_token=fragmentsecret",
+        source_url="https://user:password@example.org/card/token%3Dpathsecret?auth_token=secret&x=ok#access_token=fragmentsecret",
         source_title="test",
         model_revision="r",
         benchmark_revision="b",
         notes="api_key=supersecret Bearer abcdef Authorization: Basic basicsecret",
+        raw_log_digest="Authorization: Basic logsecret",
+        config_digest="api_key=configsecret",
+        environment_digest="token=environmentsecret",
     )
     rendered = json.dumps(record.to_dict())
     assert "user:password@" not in rendered
     assert "auth_token=secret" not in rendered
+    assert "pathsecret" not in rendered
     assert "fragmentsecret" not in rendered
     assert "supersecret" not in rendered
     assert "abcdef" not in rendered
     assert "basicsecret" not in rendered
+    assert "logsecret" not in rendered
+    assert "configsecret" not in rendered
+    assert "environmentsecret" not in rendered
     assert "[REDACTED]" in rendered
 
 

@@ -145,7 +145,8 @@ def main(argv: list[str] | None = None) -> int:
                 f"profile: {profile.profile_id} v{profile.version} ({profile.digest})\n"
             )
             sys.stdout.write(
-                f"baseline: {comparison.baseline.id} ({comparison.baseline.revision})\n"
+                f"baseline: {redact_untrusted(comparison.baseline.id)} "
+                f"({redact_untrusted(comparison.baseline.revision)})\n"
             )
         return 0
     try:

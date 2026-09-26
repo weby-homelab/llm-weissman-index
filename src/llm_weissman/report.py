@@ -10,7 +10,7 @@ from .digests import public_measurement_digest
 from .errors import InputError
 from .models import ComparisonInput, redact_untrusted
 from .profiles import Profile
-from .scoring import Evaluation, comparison_context_id
+from .scoring import Evaluation, comparison_context_id, evaluate
 
 
 def _assert_evaluation_binding(
@@ -49,6 +49,15 @@ def _assert_evaluation_binding(
         evaluation.context_id == context_id,
     )
     if not all(expected):
+        raise InputError(
+            "evaluation does not match supplied comparison/profile",
+            code="EVALUATION_BINDING_MISMATCH",
+        )
+    expected_evaluation = evaluate(comparison, profile)
+    if (
+        evaluation.result_digest != expected_evaluation.result_digest
+        or evaluation.to_dict() != expected_evaluation.to_dict()
+    ):
         raise InputError(
             "evaluation does not match supplied comparison/profile",
             code="EVALUATION_BINDING_MISMATCH",

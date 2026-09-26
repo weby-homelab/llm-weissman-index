@@ -173,13 +173,15 @@ def comparison_context_id(
         "workload": redact_untrusted(dict(comparison.workload)),
         "protocol": redact_untrusted(dict(comparison.protocol)),
         "environment": relevant_environment,
-        "baseline_identity": {
-            "id": comparison.baseline.id,
-            "revision": comparison.baseline.revision,
-            "provider": comparison.baseline.provider,
-            "model_id": comparison.baseline.model_id,
-            "snapshot": comparison.baseline.snapshot,
-        },
+        "baseline_identity": redact_untrusted(
+            {
+                "id": comparison.baseline.id,
+                "revision": comparison.baseline.revision,
+                "provider": comparison.baseline.provider,
+                "model_id": comparison.baseline.model_id,
+                "snapshot": comparison.baseline.snapshot,
+            }
+        ),
         "baseline_measurement_digest": baseline_measurement_digest or actual_baseline_digest,
         "shared_quality_context": shared_quality_context,
         "quality_transforms": [item.to_dict() for item in profile.quality],
