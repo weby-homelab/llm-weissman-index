@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
+from contextlib import suppress
 from dataclasses import dataclass
 from decimal import Decimal
 from ipaddress import ip_address
@@ -78,10 +79,8 @@ def _validate_target(value: Any, *, path: str) -> str:
         ".localhost"
     )
     if not private_literal and hostname:
-        try:
+        with suppress(ValueError):
             private_literal = not ip_address(hostname).is_global
-        except ValueError:
-            pass
     if (
         parsed.scheme != "https"
         or not hostname
