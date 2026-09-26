@@ -8,6 +8,7 @@ import pytest
 import yaml
 
 from llm_weissman.digests import sha256_digest
+from llm_weissman.errors import InputError
 from llm_weissman.models import ComparisonInput
 from llm_weissman.profiles import load_profile
 from llm_weissman.report import evaluation_document
@@ -82,6 +83,21 @@ def test_measurement_digest_declares_public_scope_not_raw_integrity() -> None:
     assert document["measurement_digests"]["candidate"] != sha256_digest(
         comparison.candidate.to_dict()
     )
+
+
+def test_report_rejects_evaluation_and_comparison_binding_mismatch() -> None:
+    root = Path(__file__).parents[1]
+    data = yaml.safe_load(
+        (root / "examples" / "synthetic" / "comparison.yaml").read_text(encoding="utf-8")
+    )
+    comparison = ComparisonInput.from_dict(data)
+    profile = load_profile("edge-v1")
+    evaluation = evaluate(comparison, profile)
+
+    data["baseline"]["revision"] = "different-baseline-revision"
+    mismatched = ComparisonInput.from_dict(data)
+    with pytest.raises(InputError, match="evaluation does not match"):
+        evaluation_document(evaluation, mismatched, profile)
 
 
 def test_measurement_schema_rejects_nonfinite_decimal_strings() -> None:

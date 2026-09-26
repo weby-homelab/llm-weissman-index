@@ -6,14 +6,59 @@ import json
 from decimal import Decimal
 from typing import Any
 
+from .digests import public_measurement_digest
+from .errors import InputError
 from .models import ComparisonInput, redact_untrusted
 from .profiles import Profile
-from .scoring import Evaluation
+from .scoring import Evaluation, comparison_context_id
+
+
+def _assert_evaluation_binding(
+    evaluation: Evaluation, comparison: ComparisonInput, profile: Profile
+) -> None:
+    measurement_digests = {
+        "candidate": public_measurement_digest(comparison.candidate.to_dict()),
+        "baseline": public_measurement_digest(comparison.baseline.to_dict()),
+    }
+    try:
+        context_id = comparison_context_id(
+            comparison,
+            profile,
+            baseline_measurement_digest=measurement_digests["baseline"],
+        )
+    except InputError as exc:
+        raise InputError(
+            "evaluation does not match supplied comparison/profile",
+            code="EVALUATION_BINDING_MISMATCH",
+        ) from exc
+    expected = (
+        evaluation.profile_id == profile.profile_id,
+        evaluation.profile_version == profile.version,
+        evaluation.profile_digest == profile.digest,
+        evaluation.candidate_id == comparison.candidate.id,
+        evaluation.baseline_id == comparison.baseline.id,
+        evaluation.candidate_revision == comparison.candidate.revision,
+        evaluation.baseline_revision == comparison.baseline.revision,
+        evaluation.candidate_provider == comparison.candidate.provider,
+        evaluation.candidate_model_id == comparison.candidate.model_id,
+        evaluation.candidate_snapshot == comparison.candidate.snapshot,
+        evaluation.baseline_provider == comparison.baseline.provider,
+        evaluation.baseline_model_id == comparison.baseline.model_id,
+        evaluation.baseline_snapshot == comparison.baseline.snapshot,
+        evaluation.measurement_digests == measurement_digests,
+        evaluation.context_id == context_id,
+    )
+    if not all(expected):
+        raise InputError(
+            "evaluation does not match supplied comparison/profile",
+            code="EVALUATION_BINDING_MISMATCH",
+        )
 
 
 def evaluation_document(
     evaluation: Evaluation, comparison: ComparisonInput, profile: Profile
 ) -> dict[str, Any]:
+    _assert_evaluation_binding(evaluation, comparison, profile)
     document = evaluation.to_dict()
     document.update(
         {
@@ -65,6 +110,7 @@ def render_json(document: dict[str, Any]) -> str:
 
 
 def render_report(evaluation: Evaluation, comparison: ComparisonInput, profile: Profile) -> str:
+    _assert_evaluation_binding(evaluation, comparison, profile)
     candidate_id = redact_untrusted(comparison.candidate.id)
     candidate_revision = redact_untrusted(comparison.candidate.revision)
     baseline_id = redact_untrusted(comparison.baseline.id)
