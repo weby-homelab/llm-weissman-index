@@ -81,6 +81,23 @@ def test_context_without_json_flag_is_human_readable() -> None:
     assert not completed.stdout.lstrip().startswith("{")
 
 
+def test_context_json_redacts_untrusted_baseline_identity(tmp_path: Path) -> None:
+    import yaml
+
+    data = yaml.safe_load(SYNTHETIC.read_text(encoding="utf-8"))
+    data["baseline"]["provider"] = "https://provider.example/model?access_token=context-secret"
+    data["baseline"]["model_id"] = "Authorization: Basic context-model-secret"
+    path = tmp_path / "context-secrets.yaml"
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+
+    completed = _run("context", str(path), "--profile", str(EDGE_PROFILE), "--json")
+
+    assert completed.returncode == 0, completed.stderr
+    assert "context-secret" not in completed.stdout
+    assert "context-model-secret" not in completed.stdout
+    assert "[REDACTED]" in completed.stdout
+
+
 def test_gliner_case_study_is_not_leaderboard_eligible() -> None:
     completed = _run("compute", str(GLINER), "--profile", str(PARAM_PROFILE), "--json")
     assert completed.returncode == 3

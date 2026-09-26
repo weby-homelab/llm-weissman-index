@@ -109,16 +109,18 @@ def main(argv: list[str] | None = None) -> int:
                 "version": profile.version,
                 "digest": profile.digest,
             },
-            "baseline": {
-                "id": comparison.baseline.id,
-                "revision": comparison.baseline.revision,
-                "provider": comparison.baseline.provider,
-                "model_id": comparison.baseline.model_id,
-                "snapshot": comparison.baseline.snapshot,
-                "measurement_digest": public_measurement_digest(comparison.baseline.to_dict()),
-                "measurement_digest_semantics": PUBLIC_MEASUREMENT_DIGEST_SEMANTICS,
-                "raw_artifact_integrity": "unavailable",
-            },
+            "baseline": redact_untrusted(
+                {
+                    "id": comparison.baseline.id,
+                    "revision": comparison.baseline.revision,
+                    "provider": comparison.baseline.provider,
+                    "model_id": comparison.baseline.model_id,
+                    "snapshot": comparison.baseline.snapshot,
+                    "measurement_digest": public_measurement_digest(comparison.baseline.to_dict()),
+                    "measurement_digest_semantics": PUBLIC_MEASUREMENT_DIGEST_SEMANTICS,
+                    "raw_artifact_integrity": "unavailable",
+                }
+            ),
             "workload": redact_untrusted(dict(comparison.workload)),
             "protocol": redact_untrusted(dict(comparison.protocol)),
             "measurement_environment": redact_untrusted(
