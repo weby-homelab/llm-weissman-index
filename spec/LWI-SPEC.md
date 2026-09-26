@@ -30,8 +30,11 @@ Two LWI values are directly comparable only when all of these match:
 The implementation hashes these semantics into `comparison_context_id`. It
 includes the baseline identity but not the candidate identity, so candidates
 can be compared only within one baseline-bound context. The candidate and
-baseline measurement records separately receive `measurement_digest`; the
-complete evaluation receives `result_digest`.
+baseline measurement records separately receive a
+`normalized_public_record_v1` `measurement_digest`: a domain-separated SHA-256
+over the canonical redacted public record. It is not a raw-artifact checksum;
+raw artifact integrity is unavailable unless raw bytes are verified separately.
+The complete evaluation receives `result_digest`.
 
 Never put `LWI=180` against baseline A beside `LWI=145` against baseline B in
 one ranking. Rebasing is explicitly deferred from v0.1.
@@ -154,8 +157,10 @@ self-measured, vendor-reported, paper-reported, model-card, derived,
 unverified, and synthetic. External records preserve URL, title, source date,
 retrieval time, source type, claim scope, model/benchmark revisions, and notes.
 Measured records can preserve raw-log/config/environment digests, code commit,
-sample count, confidence level, interval bounds, method, and seed. v0.1 does
-not propagate aggregate confidence intervals; it must not invent them.
+sample count, confidence level, interval bounds, method, and seed. Those
+producer-supplied provenance digests are not promoted to locally verified raw
+integrity by the normalized public measurement digest. v0.1 does not propagate
+aggregate confidence intervals; it must not invent them.
 
 ## Identity and performance evidence
 

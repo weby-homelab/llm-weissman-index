@@ -24,8 +24,11 @@ If quality and performance declare different artifact revision, dtype, or
 quantization, validation returns `ARTIFACT_CONTEXT_MISMATCH`; the result is not
 scoreable as one deployment. Candidate and baseline quality contexts must match
 when both are declared. The context digest carries only the shared quality
-context; candidate-specific measurements stay in measurement/result digests.
-Quality and performance do not need identical
+context; candidate-specific measurements stay in normalized-public
+measurement/result digests. A measurement digest is a domain-separated hash of
+the redacted canonical public record, not a checksum of raw artifact bytes; raw
+integrity is reported as unavailable unless it is verified separately. Quality
+and performance do not need identical
 physical hosts, but they must identify the relationship honestly.
 
 The separation prevents a profile from being tuned after seeing results and
@@ -65,5 +68,7 @@ dimensions; their geometric aggregate is not used to hide a task-level
 trade-off. A scalar LWI never replaces the Pareto view.
 
 External artifacts are imported only through explicit field mappings that carry
-source tool/version and raw artifact digest. Similar names such as ITL/TPOT or
-mean/p95 are never mapped automatically; unmapped source fields remain unknown.
+source tool/version and a separately classified raw artifact digest. A claimed
+external digest must not be presented as locally verified. Similar names such as
+ITL/TPOT or mean/p95 are never mapped automatically; unmapped source fields
+remain unknown.

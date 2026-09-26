@@ -7,6 +7,7 @@ import jsonschema
 import pytest
 import yaml
 
+from llm_weissman.digests import sha256_digest
 from llm_weissman.models import ComparisonInput
 from llm_weissman.profiles import load_profile
 from llm_weissman.report import evaluation_document
@@ -59,6 +60,27 @@ def test_runtime_result_validates_against_result_schema() -> None:
     evaluation = evaluate(comparison, load_profile("edge-v1"))
     jsonschema.validate(
         evaluation_document(evaluation, comparison, load_profile("edge-v1")), schema
+    )
+
+
+def test_measurement_digest_declares_public_scope_not_raw_integrity() -> None:
+    root = Path(__file__).parents[1]
+    comparison = ComparisonInput.from_dict(
+        yaml.safe_load(
+            (root / "examples" / "synthetic" / "comparison.yaml").read_text(encoding="utf-8")
+        )
+    )
+    profile = load_profile("edge-v1")
+    evaluation = evaluate(comparison, profile)
+    document = evaluation_document(evaluation, comparison, profile)
+
+    assert document["measurement_digest_semantics"] == "normalized_public_record_v1"
+    assert document["raw_artifact_integrity"] == {
+        "candidate": "unavailable",
+        "baseline": "unavailable",
+    }
+    assert document["measurement_digests"]["candidate"] != sha256_digest(
+        comparison.candidate.to_dict()
     )
 
 

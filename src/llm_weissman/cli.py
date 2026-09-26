@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .digests import sha256_digest
+from .digests import PUBLIC_MEASUREMENT_DIGEST_SEMANTICS, public_measurement_digest
 from .errors import InputError
 from .models import redact_untrusted
 from .pareto import ParetoPoint, pareto_dominated
@@ -115,7 +115,9 @@ def main(argv: list[str] | None = None) -> int:
                 "provider": comparison.baseline.provider,
                 "model_id": comparison.baseline.model_id,
                 "snapshot": comparison.baseline.snapshot,
-                "measurement_digest": sha256_digest(comparison.baseline.to_dict()),
+                "measurement_digest": public_measurement_digest(comparison.baseline.to_dict()),
+                "measurement_digest_semantics": PUBLIC_MEASUREMENT_DIGEST_SEMANTICS,
+                "raw_artifact_integrity": "unavailable",
             },
             "workload": redact_untrusted(dict(comparison.workload)),
             "protocol": redact_untrusted(dict(comparison.protocol)),

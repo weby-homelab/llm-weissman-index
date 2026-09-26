@@ -143,7 +143,11 @@ quality component.
 Every observation carries units, statistic, and uncertainty fields where
 available. Results preserve model revisions, benchmark revisions, environment
 metadata, evidence class, source information, raw/config/environment digests,
-profile digest, measurement digests, and result digest.
+profile digest, measurement digests, and result digest. A `measurement_digest`
+is a domain-separated SHA-256 of the `normalized_public_record_v1`
+representation after report redaction. It identifies the normalized public
+record; it is not proof of raw-artifact integrity. Evaluation output reports
+`raw_artifact_integrity: unavailable` unless raw bytes are verified separately.
 
 ## Profiles and limitations
 
@@ -161,8 +165,10 @@ GLiNER2.5-Decide examples in [`examples/`](examples/).
 
 Reports show raw candidate/baseline observations, canonical units, resource
 ratios, quality utilities, retention, gate margin, warnings, evidence classes,
-measurement digests, and the result digest. Human output is rounded for
-readability; JSON retains Decimal strings and never rounds intermediate ratios.
+normalized-public measurement digests, and the result digest. Human output is
+rounded for readability; JSON retains Decimal strings and never rounds
+intermediate ratios. A normalized-public digest must not be read as saying that
+two raw artifacts are identical after redaction.
 
 Eligible results also expose a log-space contribution ledger: each dimension
 reports its ratio, weight, and `weight * ln(ratio)`, followed by the sum. This is
@@ -199,8 +205,9 @@ The repository has no live load generator. `LiveBenchmarkPolicy` and
 `schemas/live-benchmark.schema.json` are default-deny declarative preflight
 contracts only. They cannot execute a shell command, Python expression, or
 network request. External artifacts use explicit field mappings with source
-tool/version and raw artifact digests; similar metric names are not semantic
-proof.
+tool/version and a separately classified raw artifact digest; a claimed
+external digest is not a locally verified raw digest. Similar metric names are
+not semantic proof.
 
 ## Prior art and independence
 

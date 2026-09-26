@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from decimal import Decimal, localcontext
 from typing import Any
 
-from .digests import sha256_digest
+from .digests import PUBLIC_MEASUREMENT_DIGEST_SEMANTICS, public_measurement_digest, sha256_digest
 from .errors import InputError
 from .formula import compute_lwi
 from .models import ComparisonInput, Measurement, SystemRecord, redact_untrusted
@@ -31,6 +31,11 @@ INCOMPLETE_CODES = {
     "INVALID_COST_METADATA",
     "TOKEN_COUNT_MISSING",
     "RANDOM_SEED_MISSING",
+}
+
+_RAW_ARTIFACT_INTEGRITY_UNAVAILABLE = {
+    "candidate": "unavailable",
+    "baseline": "unavailable",
 }
 
 
@@ -115,6 +120,8 @@ class Evaluation:
             ),
             "uncertainty_status": self.uncertainty_status,
             "measurement_digests": self.measurement_digests,
+            "measurement_digest_semantics": PUBLIC_MEASUREMENT_DIGEST_SEMANTICS,
+            "raw_artifact_integrity": dict(_RAW_ARTIFACT_INTEGRITY_UNAVAILABLE),
             "workload": redact_untrusted(self.workload),
             "protocol": redact_untrusted(self.protocol),
             "measurement_environment": redact_untrusted(self.measurement_environment),
@@ -141,7 +148,7 @@ def comparison_context_id(
         }
         for label in ("candidate", "baseline")
     }
-    actual_baseline_digest = sha256_digest(comparison.baseline.to_dict())
+    actual_baseline_digest = public_measurement_digest(comparison.baseline.to_dict())
     if (
         baseline_measurement_digest is not None
         and baseline_measurement_digest != actual_baseline_digest
@@ -185,8 +192,8 @@ def evaluate(comparison: ComparisonInput, profile: Profile) -> Evaluation:
     report = validate_comparison(comparison, profile)
     issues = list(report.issues)
     measurement_digests = {
-        "candidate": sha256_digest(comparison.candidate.to_dict()),
-        "baseline": sha256_digest(comparison.baseline.to_dict()),
+        "candidate": public_measurement_digest(comparison.candidate.to_dict()),
+        "baseline": public_measurement_digest(comparison.baseline.to_dict()),
     }
     context_id = comparison_context_id(
         comparison,
@@ -268,6 +275,8 @@ def evaluate(comparison: ComparisonInput, profile: Profile) -> Evaluation:
         "uncertainty_status": uncertainty_status,
         "issues": [issue.to_dict() for issue in issues],
         "measurement_digests": measurement_digests,
+        "measurement_digest_semantics": PUBLIC_MEASUREMENT_DIGEST_SEMANTICS,
+        "raw_artifact_integrity": dict(_RAW_ARTIFACT_INTEGRITY_UNAVAILABLE),
         "spec_version": comparison.spec_version,
         "schema_version": comparison.schema_version,
         "workload": redact_untrusted(dict(comparison.workload)),

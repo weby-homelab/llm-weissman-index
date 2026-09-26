@@ -47,6 +47,16 @@ def test_context_preserves_legitimate_token_counts_and_baseline_binding() -> Non
     assert payload["workload"]["input_token_count"] == 128
     assert payload["workload"]["output_token_count"] == 16
     assert payload["baseline"]["measurement_digest"].startswith("sha256:")
+    assert payload["baseline"]["measurement_digest_semantics"] == "normalized_public_record_v1"
+    assert payload["baseline"]["raw_artifact_integrity"] == "unavailable"
+
+    computed = _run("compute", str(SYNTHETIC), "--profile", str(EDGE_PROFILE), "--json")
+    assert computed.returncode == 0, computed.stderr
+    computed_payload = json.loads(computed.stdout)
+    assert (
+        computed_payload["measurement_digests"]["baseline"]
+        == payload["baseline"]["measurement_digest"]
+    )
 
 
 def test_validate_wrong_typed_scenario_is_structured_error(tmp_path) -> None:

@@ -34,8 +34,9 @@ input, not a claim that LWI implements or complies with any upstream benchmark.
 - Goodput is derived only from preserved request traces and an explicit SLO;
   failures, retries, cache state, token shape, and client headroom remain visible.
 - Uncertainty is reported as unavailable when no defensible method is present.
-- External normalization requires an explicit field map and raw artifact digest;
-  similar names do not establish semantic equivalence.
+- External normalization requires an explicit field map and a classified raw
+  artifact digest; claimed external digests are not locally verified. Similar
+  names do not establish semantic equivalence.
 - Normal PR CI remains deterministic/offline with no GPU, provider secret, paid
   judge, live endpoint, or network load benchmark. `pyperf` is informational and
   controlled-run only.

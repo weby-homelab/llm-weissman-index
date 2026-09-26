@@ -10,6 +10,8 @@ from typing import Any
 
 from .units import decimal_string
 
+PUBLIC_MEASUREMENT_DIGEST_SEMANTICS = "normalized_public_record_v1"
+
 
 def canonicalize(value: Any) -> Any:
     """Normalize nested data before hashing or serializing it."""
@@ -33,3 +35,20 @@ def canonical_json(value: Any) -> str:
 
 def sha256_digest(value: Any) -> str:
     return "sha256:" + hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
+
+
+def public_measurement_digest(value: Any) -> str:
+    """Hash a normalized public record, never the raw artifact bytes.
+
+    The domain marker makes this digest distinct from profile, context, and
+    result digests.  It is a privacy-safe public representation identity, not
+    proof of raw-artifact integrity; callers must track raw verification
+    separately.
+    """
+
+    return sha256_digest(
+        {
+            "digest_semantics": PUBLIC_MEASUREMENT_DIGEST_SEMANTICS,
+            "record": value,
+        }
+    )

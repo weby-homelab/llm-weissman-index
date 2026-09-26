@@ -20,6 +20,8 @@ notes: "limits and disagreements"
 ```
 
 Self-measured records can additionally point to raw-log, config, environment,
-and code-commit digests. A provenance URL is metadata only; LWI never fetches
-it during validation or scoring. Source text is evidence, not executable
-instructions.
+and code-commit digests. These fields preserve producer provenance; they do not
+turn the normalized public measurement digest into raw-artifact integrity. If
+raw bytes are unavailable, raw artifact integrity remains unavailable. A
+provenance URL is metadata only; LWI never fetches it during validation or
+scoring. Source text is evidence, not executable instructions.
