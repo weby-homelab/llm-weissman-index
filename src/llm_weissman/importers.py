@@ -8,6 +8,7 @@ to avoid copying arbitrary payloads into reports.
 
 from __future__ import annotations
 
+import hashlib
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -38,15 +39,17 @@ class ImportedMetrics:
     source_tool: str
     source_tool_version: str
     raw_artifact_digest: str
+    raw_artifact_digest_status: str
     field_mapping: Mapping[str, Mapping[str, str]]
     metrics: Mapping[str, Measurement]
     unknown_fields: tuple[str, ...]
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "source_tool": self.source_tool,
-            "source_tool_version": self.source_tool_version,
+            "source_tool": redact_untrusted(self.source_tool),
+            "source_tool_version": redact_untrusted(self.source_tool_version),
             "raw_artifact_digest": self.raw_artifact_digest,
+            "raw_artifact_digest_status": self.raw_artifact_digest_status,
             "field_mapping": redact_untrusted(
                 {name: dict(mapping) for name, mapping in sorted(self.field_mapping.items())}
             ),
@@ -62,24 +65,55 @@ def import_explicit_metrics(
     *,
     source_tool: str,
     source_tool_version: str,
-    raw_artifact_digest: str,
     field_mapping: Mapping[str, Mapping[str, str]],
+    raw_artifact_digest: str | None = None,
+    raw_artifact_bytes: bytes | bytearray | memoryview | None = None,
 ) -> ImportedMetrics:
     """Normalize only fields explicitly mapped by the artifact producer.
 
     ``field_mapping`` entries require ``source_field``, ``unit`` and
     ``statistic``.  An optional ``sample_count_field`` points at a separate
-    integer in the same raw object.  No field is inferred from its name.
+    integer in the same raw object.  No field is inferred from its name. If
+    ``raw_artifact_bytes`` is present, the importer computes the digest itself
+    and rejects a conflicting caller claim. Without bytes, a supplied digest is
+    retained as an explicitly unverified external claim.
     """
 
     raw_data = _mapping(raw, field="raw")
     if not field_mapping:
         raise InputError("field_mapping cannot be empty", code="IMPORT_MAPPING_MISSING")
-    raw_artifact_digest = _string(raw_artifact_digest, field="raw_artifact_digest")
-    if not _DIGEST_PATTERN.fullmatch(raw_artifact_digest):
+    if raw_artifact_bytes is not None and not isinstance(
+        raw_artifact_bytes, (bytes, bytearray, memoryview)
+    ):
         raise InputError(
-            "raw_artifact_digest must be a sha256 digest",
-            code="INVALID_ARTIFACT_DIGEST",
+            "raw_artifact_bytes must be bytes",
+            code="WRONG_TYPE",
+            path="raw_artifact_bytes",
+        )
+    if raw_artifact_digest is not None:
+        raw_artifact_digest = _string(raw_artifact_digest, field="raw_artifact_digest")
+        if not _DIGEST_PATTERN.fullmatch(raw_artifact_digest):
+            raise InputError(
+                "raw_artifact_digest must be a sha256 digest",
+                code="INVALID_ARTIFACT_DIGEST",
+                path="raw_artifact_digest",
+            )
+    if raw_artifact_bytes is not None:
+        computed_digest = "sha256:" + hashlib.sha256(bytes(raw_artifact_bytes)).hexdigest()
+        if raw_artifact_digest is not None and raw_artifact_digest != computed_digest:
+            raise InputError(
+                "raw_artifact_digest does not match locally computed digest",
+                code="ARTIFACT_DIGEST_MISMATCH",
+                path="raw_artifact_digest",
+            )
+        raw_artifact_digest = computed_digest
+        digest_status = "locally_verified"
+    elif raw_artifact_digest is not None:
+        digest_status = "claimed_external_unverified"
+    else:
+        raise InputError(
+            "raw_artifact_digest or raw_artifact_bytes is required",
+            code="ARTIFACT_DIGEST_MISSING",
             path="raw_artifact_digest",
         )
     normalized_mapping: dict[str, dict[str, str]] = {}
@@ -139,6 +173,7 @@ def import_explicit_metrics(
         source_tool=_string(source_tool, field="source_tool"),
         source_tool_version=_string(source_tool_version, field="source_tool_version"),
         raw_artifact_digest=raw_artifact_digest,
+        raw_artifact_digest_status=digest_status,
         field_mapping=normalized_mapping,
         metrics=metrics,
         unknown_fields=unknown_fields,

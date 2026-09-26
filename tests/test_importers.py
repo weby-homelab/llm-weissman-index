@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from decimal import Decimal
 
 import pytest
@@ -49,7 +50,32 @@ def test_explicit_import_preserves_provenance_mapping_and_unknown_names() -> Non
     assert imported.unknown_fields == ("vendor_extension",)
     document = imported.to_dict()
     assert document["source_tool_version"] == "0.30.0"
+    assert document["raw_artifact_digest_status"] == "claimed_external_unverified"
     assert document["field_mapping"]["ttft"]["source_field"] == "p95_ttft_ms"
+
+
+def test_importer_computes_local_digest_and_rejects_claim_mismatch() -> None:
+    artifact = b"local benchmark artifact"
+    imported = import_explicit_metrics(
+        _raw(),
+        source_tool="vllm",
+        source_tool_version="0.30.0",
+        field_mapping=_mapping(),
+        raw_artifact_bytes=artifact,
+    )
+    expected = "sha256:" + hashlib.sha256(artifact).hexdigest()
+    assert imported.raw_artifact_digest == expected
+    assert imported.raw_artifact_digest_status == "locally_verified"
+
+    with pytest.raises(InputError, match="does not match locally computed digest"):
+        import_explicit_metrics(
+            _raw(),
+            source_tool="vllm",
+            source_tool_version="0.30.0",
+            field_mapping=_mapping(),
+            raw_artifact_digest="sha256:" + "a" * 64,
+            raw_artifact_bytes=artifact,
+        )
 
 
 @pytest.mark.parametrize(
