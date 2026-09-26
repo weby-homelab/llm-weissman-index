@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "llm-weissman-index"
-version = "0.1.0"
+version = "0.2.0"
 description = "Reproducible quality-adjusted efficiency metrics for language-model systems, inspired by the Weissman Score."
 readme = "README.md"
 requires-python = ">=3.11"

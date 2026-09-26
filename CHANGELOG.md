@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-26
+
 ### Added
 
 - Explicit performance evidence primitives for scenarios, observed operating
@@ -26,6 +28,26 @@ All notable changes to this project are documented here.
 - URL-path token redaction, unhashable-enum structured errors, CLI InputError
   boundaries, and live-policy schema parity (positive caps, credential-free
   targets, cost/currency binding).
+- GLiNER2.5-Decide evidence labels and conflicting published parameter claims
+  remain explicit rather than being promoted to an unsupported score.
+
+### Security / robustness
+
+- YAML and JSON inputs remain bounded, strict, non-executable, and offline;
+  provenance URLs are recorded but never fetched by the package.
+- Live benchmark policy remains declarative and default-deny; no live traffic
+  or paid external judge was run for this release.
+
+### Compatibility
+
+- The software package and CLI release version is `0.2.0`; existing `validate`,
+  `compute`, and `report` commands remain available, with context-bound
+  `context` and `pareto` analysis available for the expanded evidence model.
+- `spec_version: "0.1"`, `schema_version: "1"`, `param-v1`, `edge-v1`, and
+  `api-v1` remain unchanged, including their released profile digests.
+- Validation is intentionally stricter for malformed or incomparable
+  performance/provenance records. Inputs that relied on silently accepted
+  invalid semantics must be corrected rather than silently reweighted.
 
 ## [0.1.0] - 2026-09-25
 
