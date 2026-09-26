@@ -37,7 +37,7 @@
     "max_total_requests": {"type": "integer", "minimum": 1},
     "max_duration_seconds": {"$ref": "#/$defs/positive_decimal"},
     "timeout_seconds": {"$ref": "#/$defs/positive_decimal"},
-      "abort_error_rate": {"$ref": "#/$defs/abort_error_rate"},
+    "abort_error_rate": {"$ref": "#/$defs/abort_error_rate"},
     "max_estimated_cost": {"$ref": "#/$defs/positive_decimal"},
     "currency": {"type": "string", "minLength": 1}
   },
