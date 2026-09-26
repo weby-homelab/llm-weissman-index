@@ -44,9 +44,15 @@ def _escape_control_characters(value: str) -> str:
 
 def _redact_text(value: str) -> str:
     redacted = re.sub(
-        r"(?i)(bearer\s+|(?:[a-z0-9_-]*(?:api[_-]?key|token|secret|password|auth|signature|sig)[a-z0-9_-]*)\s*[=:]\s*)[^\s,;&]+",
+        r"(?i)(\b(?:authorization|proxy-authorization)\s*[=:]\s*)"
+        r"(?:[a-z]+\s+)?[^\s,;&]+",
         r"\1[REDACTED]",
         value,
+    )
+    redacted = re.sub(
+        r"(?i)(bearer\s+|(?:[a-z0-9_-]*(?:api[_-]?key|token|secret|password|auth|signature|sig)[a-z0-9_-]*)\s*[=:]\s*)[^\s,;&]+",
+        r"\1[REDACTED]",
+        redacted,
     )
     return _escape_control_characters(redacted)
 
@@ -856,7 +862,7 @@ class SystemRecord:
         for name in ("provider", "model_id", "snapshot"):
             value = getattr(self, name)
             if value is not None:
-                result[name] = value
+                result[name] = redact_untrusted(value)
         if self.cost_metadata is not None:
             result["cost_metadata"] = self.cost_metadata.to_dict()
         for name in ("model_artifact", "quality_context", "execution_system", "operating_envelope"):

@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from llm_weissman.errors import InputError
-from llm_weissman.models import CostMetadata, Measurement, ProvenanceRecord
+from llm_weissman.models import ComparisonInput, CostMetadata, Measurement, ProvenanceRecord
 from llm_weissman.profiles import Profile, load_profile
 from llm_weissman.provenance import provenance_issues
 from llm_weissman.validation import load_data_file
@@ -104,7 +104,7 @@ def test_provenance_serialization_redacts_credentials_and_query_tokens() -> None
         source_title="test",
         model_revision="r",
         benchmark_revision="b",
-        notes="api_key=supersecret Bearer abcdef",
+        notes="api_key=supersecret Bearer abcdef Authorization: Basic basicsecret",
     )
     rendered = json.dumps(record.to_dict())
     assert "user:password@" not in rendered
@@ -112,6 +112,20 @@ def test_provenance_serialization_redacts_credentials_and_query_tokens() -> None
     assert "fragmentsecret" not in rendered
     assert "supersecret" not in rendered
     assert "abcdef" not in rendered
+    assert "basicsecret" not in rendered
+    assert "[REDACTED]" in rendered
+
+
+def test_system_identity_serialization_redacts_untrusted_fields() -> None:
+    root = Path(__file__).parents[1]
+    data = load_data_file(root / "examples" / "synthetic" / "comparison.yaml")
+    data["baseline"]["provider"] = "https://provider.example/model?access_token=provider-secret"
+    data["baseline"]["model_id"] = "Authorization: Basic model-secret"
+    comparison = ComparisonInput.from_dict(data)
+
+    rendered = json.dumps(comparison.baseline.to_dict())
+    assert "provider-secret" not in rendered
+    assert "model-secret" not in rendered
     assert "[REDACTED]" in rendered
 
 
