@@ -19,13 +19,24 @@ _SENSITIVE_QUERY_NAMES = {
     "apikey",
     "auth",
     "client_secret",
+    "cookie",
+    "cookies",
+    "csrf",
+    "csrf_token",
+    "csrfmiddlewaretoken",
     "key",
     "password",
     "private_key",
     "secret",
+    "session",
+    "session_id",
+    "sessionid",
+    "set-cookie",
     "sig",
     "signature",
     "token",
+    "xsrf",
+    "xsrf_token",
 }
 _CONTROL_CHARACTERS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
@@ -50,7 +61,7 @@ def _redact_text(value: str) -> str:
         value,
     )
     redacted = re.sub(
-        r"(?i)(bearer\s+|(?:[a-z0-9_-]*(?:api[_-]?key|token|secret|password|auth|signature|sig)[a-z0-9_-]*)\s*[=:]\s*)[^\s,;&]+",
+        r"(?i)(bearer\s+|(?:[a-z0-9_-]*(?:api[_-]?key|token|secret|password|auth|signature|sig|cookie|session|csrf|xsrf)[a-z0-9_-]*)\s*[=:]\s*)[^\s,;&]+",
         r"\1[REDACTED]",
         redacted,
     )
@@ -78,7 +89,18 @@ def _redact_url(value: str) -> str:
                     if key.lower() in _SENSITIVE_QUERY_NAMES
                     or any(
                         marker in key.lower()
-                        for marker in ("token", "secret", "auth", "key", "password", "sig")
+                        for marker in (
+                            "token",
+                            "secret",
+                            "auth",
+                            "key",
+                            "password",
+                            "sig",
+                            "cookie",
+                            "session",
+                            "csrf",
+                            "xsrf",
+                        )
                     )
                     else _redact_text(item),
                 )
@@ -127,8 +149,21 @@ def redact_untrusted(value: Any) -> Any:
             return True
         return (
             lowered in {"authorization", "auth_token", "api_token", "access_token", "refresh_token"}
-            or lowered.endswith(("_secret", "_password", "_token", "_api_key"))
-            or lowered.startswith(("api_key_", "secret_", "password_"))
+            or lowered.endswith(
+                (
+                    "_secret",
+                    "_password",
+                    "_token",
+                    "_api_key",
+                    "_cookie",
+                    "_session",
+                    "_csrf",
+                    "_xsrf",
+                )
+            )
+            or lowered.startswith(
+                ("api_key_", "secret_", "password_", "cookie_", "session_", "csrf_", "xsrf_")
+            )
         )
 
     if isinstance(value, dict):

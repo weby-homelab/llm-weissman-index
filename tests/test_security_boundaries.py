@@ -7,7 +7,13 @@ from pathlib import Path
 import pytest
 
 from llm_weissman.errors import InputError
-from llm_weissman.models import ComparisonInput, CostMetadata, Measurement, ProvenanceRecord
+from llm_weissman.models import (
+    ComparisonInput,
+    CostMetadata,
+    Measurement,
+    ProvenanceRecord,
+    redact_untrusted,
+)
 from llm_weissman.profiles import Profile, load_profile
 from llm_weissman.provenance import provenance_issues
 from llm_weissman.validation import load_data_file
@@ -120,6 +126,35 @@ def test_provenance_serialization_redacts_credentials_and_query_tokens() -> None
     assert "logsecret" not in rendered
     assert "configsecret" not in rendered
     assert "environmentsecret" not in rendered
+    assert "[REDACTED]" in rendered
+
+
+def test_untrusted_serialization_redacts_cookie_session_and_csrf_values() -> None:
+    payload = {
+        "Cookie": "cookie-secret",
+        "session_id": "session-secret",
+        "csrfmiddlewaretoken": "csrf-secret",
+        "headers": "X-CSRFToken: header-secret",
+        "source_url": (
+            "https://example.org/card?cookie=query-secret&session_id=query-session"
+            "&csrf=query-csrf&ok=visible"
+        ),
+        "input_token_count": 7,
+    }
+
+    rendered = json.dumps(redact_untrusted(payload), sort_keys=True)
+
+    for secret in (
+        "cookie-secret",
+        "session-secret",
+        "csrf-secret",
+        "header-secret",
+        "query-secret",
+        "query-session",
+        "query-csrf",
+    ):
+        assert secret not in rendered
+    assert '"input_token_count": 7' in rendered
     assert "[REDACTED]" in rendered
 
 
