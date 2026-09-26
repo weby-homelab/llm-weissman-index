@@ -43,69 +43,62 @@ uv build --no-sources
 
 ## Architecture at a glance
 
-The reference path is intentionally auditable: untrusted evidence enters
-through a bounded parser, comparability is checked before mathematics, and an
-eligibility gate separates valid scores from incomplete or ineligible records.
-In the same order: capture evidence, normalize the comparison context, apply
-the immutable profile, then emit context-bound reports and analysis. CI build
-artifacts are a separate release lane, not scoring outputs.
+The reference path is intentionally auditable: preserved candidate/baseline
+evidence enters through bounded safe parsing (or an optional explicit,
+field-mapped importer), then comparability binds the workload, protocol,
+environment, provenance, baseline, and immutable profile into a context ID.
+Only comparable records reach quality/resource analysis and the eligibility
+gate; invalid, incomplete, and ineligible records retain diagnostics without a
+leaderboard-friendly LWI. Reports and digests remain separate from the
+same-context Pareto command. CI build artifacts are a separate release lane,
+not scoring outputs.
 
 ```mermaid
-flowchart TB
+flowchart LR
     accTitle: LLM Weissman Index evaluation pipeline
-    accDescr: Untrusted comparison evidence is parsed and validated, combined with an immutable profile, gated for eligibility, and emitted as context-bound reports, digests, and Pareto analysis.
+    accDescr: Preserved candidate and baseline evidence is parsed safely, checked for comparability against an immutable profile, analyzed only after validation, gated for eligibility, and emitted as context-bound reports and digests. Invalid, incomplete, and ineligible records keep diagnostics without a leaderboard score. Pareto is a separate same-context analysis.
 
-    subgraph CAPTURE["1 · Capture evidence"]
-        INPUT["Comparison YAML / JSON"]
-        IMPORT["Preserved evidence import<br/>explicit field map · URLs never fetched"]
-        SAFE["Bounded safe loader<br/>strict fields · no execution"]
-        INPUT --> SAFE
+    subgraph EVIDENCE["1 · Evidence"]
+        INPUT["Preserved candidate + baseline<br/>YAML or JSON"]
+        PARSE["Bounded safe parse<br/>strict typed records · no execution"]
+        ADAPTER["Optional explicit importer<br/>field map · no inference"]
+        INPUT --> PARSE
+        ADAPTER -.-> PARSE
     end
 
-    subgraph NORMALIZE["2 · Normalize & compare"]
-        RECORDS["Candidate + baseline records<br/>units · statistics · provenance"]
-        PROTOCOL["Protocol + environment<br/>scenario · cache · SLO · identities"]
+    subgraph CONTEXT["2 · Comparison context"]
+        VALIDATE["Comparability validation<br/>workload · protocol · environment<br/>cache · SLO · provenance"]
         PROFILE["Immutable profile<br/>metrics · transforms · weights · quality gate"]
-        VALIDATE["Semantic comparability validation<br/>revisions · context fields · evidence"]
-        CONTEXT["comparison_context_id<br/>baseline-bound semantic identity"]
-        SAFE --> RECORDS
-        IMPORT --> RECORDS
-        RECORDS --> VALIDATE
-        PROTOCOL --> VALIDATE
+        READY["Baseline-bound context<br/>profile + comparison_context_id"]
+        PARSE --> VALIDATE
         PROFILE --> VALIDATE
-        VALIDATE --> CONTEXT
+        VALIDATE -->|valid| READY
     end
 
-    subgraph ANALYZE["3 · Analyze & gate"]
-        QUALITY["Quality utility<br/>raw quality → dimensionless utility → RQ"]
-        RATIOS["Resource ratios<br/>canonical units · direction-aware"]
-        STATUS["Eligibility / status gate<br/>eligible · incomplete · invalid · ineligible"]
+    subgraph ANALYSIS["3 · Analysis & eligibility"]
+        CALC["Raw quality → dimensionless utility<br/>direction-aware resource ratios"]
+        GATE{"Quality / eligibility<br/>gate passed?"}
         KERNEL["LWI kernel<br/>100 × exp(weighted log ratios)"]
-        RECORDS --> QUALITY
-        RECORDS --> RATIOS
-        PROFILE --> QUALITY
-        PROFILE --> RATIOS
-        QUALITY --> STATUS
-        RATIOS --> STATUS
-        CONTEXT --> STATUS
-        STATUS -->|eligible| KERNEL
+        STATUS["Structured outcome<br/>eligible: LWI + contributions<br/>invalid · incomplete · ineligible: diagnostics"]
+        READY --> CALC
+        CALC --> GATE
+        GATE -->|eligible| KERNEL
+        GATE -->|ineligible| STATUS
+        KERNEL --> STATUS
+        VALIDATE -->|invalid / incomplete| STATUS
     end
 
     subgraph OUTPUTS["4 · Auditable outputs"]
-        EVALUATION["Context-bound evaluation<br/>status · optional LWI · contributions"]
-        REPORT["CLI report / JSON / context"]
-        DIGESTS["Measurement · profile · result digests<br/>raw-artifact integrity separate"]
-        PARETO["Context-bound Pareto<br/>eligible records · raw dimensions"]
-        EVALUATION --> REPORT
-        EVALUATION --> DIGESTS
+        REPORT["CLI report · JSON"]
+        DIGESTS["Measurement · profile · result digests<br/>raw-artifact integrity stays separate"]
+        CONTEXT_CMD["context command"]
+        PARETO["Separate Pareto analysis<br/>eligible records · one context"]
+        STATUS --> REPORT
+        STATUS --> DIGESTS
+        READY --> CONTEXT_CMD
+        READY -.-> PARETO
+        GATE -.->|eligible records| PARETO
     end
-
-    STATUS --> EVALUATION
-    KERNEL --> EVALUATION
-    CONTEXT --> EVALUATION
-    RECORDS --> PARETO
-    CONTEXT --> PARETO
-    STATUS -->|eligible records| PARETO
 ```
 
 ## Formula
@@ -179,8 +172,9 @@ and an explicit SLO; failures, retries, cache state, token shape, and client
 headroom remain visible. Interpolated points are never default score inputs.
 
 Scalar LWI is a convenience layer. When multiple eligible records share one
-context, `lwi pareto FILE... --profile PROFILE` exposes reusable raw-dimension
-dominance flags. It refuses incompatible contexts.
+context, `lwi pareto FILE... --profile PROFILE` exposes reusable dominance flags
+over quality utilities and normalized resource ratios. It refuses incompatible
+contexts.
 
 ## Reproducibility and security
 
