@@ -80,7 +80,7 @@ def _validate_target(value: Any, *, path: str) -> str:
     )
     if not private_literal and hostname:
         with suppress(ValueError):
-            private_literal = not ip_address(hostname).is_global
+            private_literal = not ip_address(normalized_hostname).is_global
     if (
         parsed.scheme != "https"
         or not hostname

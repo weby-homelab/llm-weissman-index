@@ -43,7 +43,11 @@ def test_live_policy_rejects_non_https_or_credentialed_targets() -> None:
         "http://authorized.example.test/generate",
         "https://user:password@authorized.example.test/generate",
         "https://localhost/generate",
+        "https://localhost./generate",
         "https://127.0.0.1/generate",
+        "https://127.0.0.1./generate",
+        "https://10.0.0.1./generate",
+        "https://169.254.169.254./generate",
         "https://[::1]/generate",
         "https://[malformed/generate",
     ):
