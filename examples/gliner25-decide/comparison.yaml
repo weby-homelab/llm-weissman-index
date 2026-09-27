@@ -60,6 +60,7 @@ candidate:
       model_revision: released-checkpoint
       benchmark_revision: fast-decisions-blog-as-retrieved-2026-09-25
       notes: "Blog reports 60.1%, 340M, and vendor latency figures; no baseline latency is manufactured."
+  environment: {}
 baseline:
   id: SemIf (Qwen3.5-4B comparison row)
   revision: unavailable-comparison-row
@@ -76,7 +77,7 @@ baseline:
         method: reported_comparison_row
   metrics: {}
   parameters:
-    status: reported
+    status: disputed
     total:
       value: "4000000000"
       unit: count
@@ -88,14 +89,14 @@ baseline:
   provenance:
     - evidence_class: model_card
       source_type: Hugging Face model card
-      claim_scope: comparison model parameter semantics
+      claim_scope: comparison-row parameter label; quality source unavailable
       retrieved_at: "2026-09-25T14:15:00Z"
       source_url: https://huggingface.co/Qwen/Qwen3.5-4B-Base
       source_title: "Qwen/Qwen3.5-4B-Base model card"
       source_date: "2026-02"
       model_revision: unavailable-comparison-row
       benchmark_revision: fast-decisions-card-as-retrieved-2026-09-25
-      notes: "The 4B model overview is not a reproduced SemIf checkpoint parameter measurement."
+      notes: "The 4B overview is not a reproduced SemIf checkpoint measurement; the comparison-row quality value is not independently attributable to this exact checkpoint."
   environment: {}
 workload:
   id: fast-decisions

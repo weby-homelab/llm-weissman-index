@@ -9,6 +9,28 @@ LWI separates three layers:
 3. **Kernel**: Decimal conversion, utility aggregation, geometric ratios, and
    context/result digests.
 
+The evidence model keeps four identities separate:
+
+1. **Model artifact** — artifact/checkpoint and weights revision or digest,
+   adapters, tokenizer, dtype, and quantization.
+2. **Quality context** — dataset/split/task revision, prompt and chat-template
+   digests, few-shot selection, scorer/judge configuration, and grading epoch.
+3. **Execution system** — runtime, hardware/device count, parallelism, serving
+   configuration, and cache policy.
+4. **Performance protocol** — scenario, load process, warmup, statistic,
+   workload shape, SLO, and failure/retry rules.
+
+If quality and performance declare different artifact revision, dtype, or
+quantization, validation returns `ARTIFACT_CONTEXT_MISMATCH`; the result is not
+scoreable as one deployment. Candidate and baseline quality contexts must match
+when both are declared. The context digest carries only the shared quality
+context; candidate-specific measurements stay in normalized-public
+measurement/result digests. A measurement digest is a domain-separated hash of
+the redacted canonical public record, not a checksum of raw artifact bytes; raw
+integrity is reported as unavailable unless it is verified separately. Quality
+and performance do not need identical
+physical hosts, but they must identify the relationship honestly.
+
 The separation prevents a profile from being tuned after seeing results and
 prevents a benchmark value from being treated as a universal model property.
 
@@ -31,3 +53,22 @@ the scalar. Ineligible and incomplete results should not enter a leaderboard.
 - compare active MoE parameters with dense total parameters;
 - convert currencies without preserved FX source/rate/timestamp;
 - manufacture uncertainty, latency, or benchmark evidence.
+
+## Analysis output
+
+Every finite score exposes each log-space component as `ratio`, `weight`, and
+`weight * ln(ratio)`, plus the sum. This makes a score dominated by one extreme
+dimension visible. The `uncertainty_status` is `available` only when all included
+observations carry a defensible interval and confidence level; otherwise it is
+`unavailable`, not fabricated.
+
+Pareto analysis requires one `comparison_context_id`, identical dimensions and
+directions, and unique candidate IDs. Quality utilities remain separate Pareto
+dimensions; their geometric aggregate is not used to hide a task-level
+trade-off. A scalar LWI never replaces the Pareto view.
+
+External artifacts are imported only through explicit field mappings that carry
+source tool/version and a separately classified raw artifact digest. A claimed
+external digest must not be presented as locally verified. Similar names such as
+ITL/TPOT or mean/p95 are never mapped automatically; unmapped source fields
+remain unknown.

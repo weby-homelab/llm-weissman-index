@@ -13,6 +13,14 @@ SECRET_PATTERNS = (
     re.compile(rb"gh[pousr]_[A-Za-z0-9_\-]{20,}"),
     re.compile(rb"sk-[A-Za-z0-9_\-]{20,}"),
 )
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+
+
+def artifact_paths() -> list[Path]:
+    dist_dir = REPOSITORY_ROOT / "dist"
+    if dist_dir.is_symlink() or dist_dir.resolve() != dist_dir:
+        raise SystemExit("dist must be a repository-local directory")
+    return sorted(dist_dir.glob("*.whl")) + sorted(dist_dir.glob("*.tar.gz"))
 
 
 def members(path: Path) -> list[tuple[str, bytes]]:
@@ -29,11 +37,11 @@ def members(path: Path) -> list[tuple[str, bytes]]:
 
 
 def main() -> int:
-    artifact_paths = sorted(Path("dist").glob("*.whl")) + sorted(Path("dist").glob("*.tar.gz"))
-    if not artifact_paths:
+    paths = artifact_paths()
+    if not paths:
         raise SystemExit("no distributable artifacts found")
     violations: list[str] = []
-    for artifact in artifact_paths:
+    for artifact in paths:
         for name, content in members(artifact):
             lowered = name.lower()
             if any(part in lowered for part in FORBIDDEN_NAME_PARTS):
@@ -42,7 +50,7 @@ def main() -> int:
                 violations.append(f"{artifact}:{name}: secret-like content")
     if violations:
         raise SystemExit("\n".join(violations))
-    print(f"artifact inspection: PASS ({len(artifact_paths)} artifacts)")
+    print(f"artifact inspection: PASS ({len(paths)} artifacts)")
     return 0
 
 

@@ -25,8 +25,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      # astral-sh/setup-uv v9.0.0; immutable commit pin.
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
+      # astral-sh/setup-uv v10.2.0; immutable commit pin.
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7
         with:
           version: "0.11.33"
           enable-cache: true
@@ -52,8 +52,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      # astral-sh/setup-uv v9.0.0; immutable commit pin.
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
+      # astral-sh/setup-uv v10.2.0; immutable commit pin.
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7
         with:
           version: "0.11.33"
           enable-cache: true
@@ -64,4 +64,12 @@ jobs:
       - name: Build without local sources
         run: uv build --no-sources
       - name: Inspect artifact names
-        run: python scripts/inspect_artifacts.py
+        run: uv run python scripts/inspect_artifacts.py
+      - name: Install wheel into a clean environment
+        run: |
+          uv venv --python 3.13 /tmp/lwi-clean-env
+          uv pip install --python /tmp/lwi-clean-env/bin/python dist/*.whl
+      - name: Smoke-test installed CLI
+        run: |
+          /tmp/lwi-clean-env/bin/lwi validate examples/synthetic/comparison.yaml \
+            --profile profiles/edge-v1.yaml --json

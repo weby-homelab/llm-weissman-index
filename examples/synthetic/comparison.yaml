@@ -101,6 +101,9 @@ workload:
   dataset_checksum: sha256:synthetic-fixture
   split: test
   task: classification
+  token_count_method: fixed_fixture
+  tokenizer: synthetic-tokenizer
+  tokenizer_revision: "1"
   input_token_count: 128
   output_token_count: 16
 protocol:
@@ -112,6 +115,8 @@ protocol:
   random_seed: 7
   batch_size: 1
   concurrency: 1
+  scenario: offline
+  evidence_tier: fixture
   cache_state: cold
   streaming: false
   network_inclusion: excluded

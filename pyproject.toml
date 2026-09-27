@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "llm-weissman-index"
-version = "0.1.0"
+version = "0.2.0"
 description = "Reproducible quality-adjusted efficiency metrics for language-model systems, inspired by the Weissman Score."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -31,7 +31,7 @@ lwi = "llm_weissman.cli:main"
 dev = [
     "jsonschema>=4.25,<5",
     "pytest>=8.4,<10",
-    "ruff>=0.12,<0.14",
+    "ruff>=0.12,<0.17",
 ]
 
 [tool.uv]

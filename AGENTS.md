@@ -31,6 +31,17 @@ uv build --no-sources
 - Run focused tests after each code slice and the full gate before a commit.
 - Do not read secrets, `.env` files, credentials, private keys, or tokens.
 - Never force-push, rewrite published history, or reset/clean unrelated work.
+- Distinguish `fixture`, `smoke`, and `publication` evidence; synthetic fixtures
+  are never measured results.
+- Performance records must declare `offline`, `open_loop`, or `closed_loop`
+  scenario and preserve observed operating points, workload shape, cache policy,
+  failures, retries, client headroom, and latency semantics.
+- Interpolated points are display-only unless a future versioned protocol says
+  otherwise; default scoring uses observed points only. Goodput requires an
+  explicit SLO and remains context-bound.
+- Never run live load traffic from normal tests or CI. A future live runner must
+  use declarative validation, explicit authorization, an exact target allowlist,
+  and bounded rate/concurrency/request/duration/cost limits.
 
 Review `spec/LWI-SPEC.md`, `docs/threats-to-validity.md`, and
 `docs/security-model.md` before changing scoring semantics.

@@ -43,73 +43,62 @@ uv build --no-sources
 
 ## Architecture at a glance
 
-The reference path is intentionally auditable: evidence enters through a
-bounded parser, policy and comparability guards run before mathematics, and
-every report carries the identities needed to reproduce its context.
+The reference path is intentionally auditable: preserved candidate/baseline
+evidence enters through bounded safe parsing (or an optional explicit,
+field-mapped importer), then comparability binds the workload, protocol,
+environment, provenance, baseline, and immutable profile into a context ID.
+Only comparable records reach quality/resource analysis and the eligibility
+gate; invalid, incomplete, and ineligible records retain diagnostics without a
+leaderboard-friendly LWI. Reports and digests remain separate from the
+same-context Pareto command. CI build artifacts are a separate release lane,
+not scoring outputs.
 
 ```mermaid
-%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Inter, ui-sans-serif, system-ui", "primaryColor": "#FFF4D6", "primaryTextColor": "#172033", "primaryBorderColor": "#F59E0B", "lineColor": "#64748B", "secondaryColor": "#E0F2FE", "tertiaryColor": "#FCE7F3", "clusterBkg": "#F8FAFC", "clusterBorder": "#CBD5E1"}}}%%
 flowchart LR
-    subgraph EVIDENCE["01 · Evidence & workload"]
-        SRC["Benchmark / model sources"]
-        RECORDS["Candidate + baseline records"]
-        PROTOCOL["Protocol + environment"]
+    accTitle: LLM Weissman Index evaluation pipeline
+    accDescr: Preserved candidate and baseline evidence is parsed safely, checked for comparability against an immutable profile, analyzed only after validation, gated for eligibility, and emitted as context-bound reports and digests. Invalid, incomplete, and ineligible records keep diagnostics without a leaderboard score. Pareto is a separate same-context analysis.
+
+    subgraph EVIDENCE["1 · Evidence"]
+        INPUT["Preserved candidate + baseline<br/>YAML or JSON"]
+        PARSE["Bounded safe parse<br/>strict typed records · no execution"]
+        ADAPTER["Optional explicit importer<br/>field map · no inference"]
+        INPUT --> PARSE
+        ADAPTER -.-> PARSE
     end
 
-    INPUT["YAML / JSON comparison"]
-    SAFE["Bounded safe loader\nstrict fields · no execution"]
-
-    subgraph GUARDS["02 · Comparability guards"]
-        VALIDATE["Semantic validation"]
-        UNITS["Typed units + statistics"]
-        PROVENANCE["Provenance + uncertainty"]
-        CONTEXT["comparison_context_id"]
+    subgraph CONTEXT["2 · Comparison context"]
+        VALIDATE["Comparability validation<br/>workload · protocol · environment<br/>cache · SLO · provenance"]
+        PROFILE["Immutable profile<br/>metrics · transforms · weights · quality gate"]
+        READY["Baseline-bound context<br/>profile + comparison_context_id"]
+        PARSE --> VALIDATE
+        PROFILE --> VALIDATE
+        VALIDATE -->|valid| READY
     end
 
-    subgraph KERNEL["03 · Policy & kernel"]
-        PROFILE["Immutable profile\nweights · transforms · gate"]
-        QUALITY["Quality utility\nRQ geometric aggregate"]
-        RATIOS["Resource ratios\nlower / higher is better"]
-        LWI["LWI = 100 × exp(Σ w · ln R)"]
+    subgraph ANALYSIS["3 · Analysis & eligibility"]
+        CALC["Raw quality → dimensionless utility<br/>direction-aware resource ratios"]
+        GATE{"Quality / eligibility<br/>gate passed?"}
+        KERNEL["LWI kernel<br/>100 × exp(weighted log ratios)"]
+        STATUS["Structured outcome<br/>eligible: LWI + contributions<br/>invalid · incomplete · ineligible: diagnostics"]
+        READY --> CALC
+        CALC --> GATE
+        GATE -->|eligible| KERNEL
+        GATE -->|ineligible| STATUS
+        KERNEL --> STATUS
+        VALIDATE -->|invalid / incomplete| STATUS
     end
 
-    subgraph OUTPUTS["04 · Auditable outputs"]
-        REPORT["CLI report / JSON"]
-        PARETO["Context-bound Pareto"]
-        DIGESTS["Measurement · profile · result digests"]
-        ARTIFACTS["Wheel · sdist · SBOM · CI"]
+    subgraph OUTPUTS["4 · Auditable outputs"]
+        REPORT["CLI report · JSON"]
+        DIGESTS["Measurement · profile · result digests<br/>raw-artifact integrity stays separate"]
+        CONTEXT_CMD["context command"]
+        PARETO["Separate Pareto analysis<br/>eligible records · one context"]
+        STATUS --> REPORT
+        STATUS --> DIGESTS
+        READY --> CONTEXT_CMD
+        READY -.-> PARETO
+        GATE -.->|eligible records| PARETO
     end
-
-    SRC --> RECORDS
-    RECORDS --> INPUT
-    PROTOCOL --> INPUT
-    INPUT --> SAFE --> VALIDATE
-    VALIDATE --> UNITS
-    VALIDATE --> PROVENANCE
-    VALIDATE --> CONTEXT
-    PROFILE --> QUALITY
-    PROFILE --> RATIOS
-    CONTEXT --> LWI
-    QUALITY --> LWI
-    RATIOS --> LWI
-    LWI --> REPORT
-    LWI --> PARETO
-    CONTEXT --> DIGESTS
-    LWI --> DIGESTS
-    REPORT --> ARTIFACTS
-    DIGESTS --> ARTIFACTS
-
-    classDef source fill:#E0F2FE,stroke:#0284C7,color:#082F49,stroke-width:2px;
-    classDef guard fill:#FEE2E2,stroke:#DC2626,color:#450A0A,stroke-width:2px;
-    classDef policy fill:#FEF3C7,stroke:#D97706,color:#451A03,stroke-width:2px;
-    classDef kernel fill:#DCFCE7,stroke:#16A34A,color:#052E16,stroke-width:2px;
-    classDef output fill:#FCE7F3,stroke:#DB2777,color:#500724,stroke-width:2px;
-
-    class SRC,RECORDS,PROTOCOL,INPUT source;
-    class SAFE,VALIDATE,UNITS,PROVENANCE,CONTEXT guard;
-    class PROFILE,QUALITY,RATIOS policy;
-    class LWI kernel;
-    class REPORT,PARETO,DIGESTS,ARTIFACTS output;
 ```
 
 ## Formula
@@ -143,7 +132,11 @@ quality component.
 Every observation carries units, statistic, and uncertainty fields where
 available. Results preserve model revisions, benchmark revisions, environment
 metadata, evidence class, source information, raw/config/environment digests,
-profile digest, measurement digests, and result digest.
+profile digest, measurement digests, and result digest. A `measurement_digest`
+is a domain-separated SHA-256 of the `normalized_public_record_v1`
+representation after report redaction. It identifies the normalized public
+record; it is not proof of raw-artifact integrity. Evaluation output reports
+`raw_artifact_integrity: unavailable` unless raw bytes are verified separately.
 
 ## Profiles and limitations
 
@@ -161,12 +154,27 @@ GLiNER2.5-Decide examples in [`examples/`](examples/).
 
 Reports show raw candidate/baseline observations, canonical units, resource
 ratios, quality utilities, retention, gate margin, warnings, evidence classes,
-measurement digests, and the result digest. Human output is rounded for
-readability; JSON retains Decimal strings and never rounds intermediate ratios.
+normalized-public measurement digests, and the result digest. Human output is
+rounded for readability; JSON retains Decimal strings and never rounds
+intermediate ratios. A normalized-public digest must not be read as saying that
+two raw artifacts are identical after redaction.
+
+Eligible results also expose a log-space contribution ledger: each dimension
+reports its ratio, weight, and `weight * ln(ratio)`, followed by the sum. This is
+an audit aid, not an additional score. `uncertainty_status` is `unavailable`
+when the preserved observations do not support a defensible interval.
+
+Performance evidence is explicit rather than a generic `throughput` context.
+Use `offline`, `open_loop`, or `closed_loop` scenarios and preserve observed
+`OperatingPoint`/`OperatingEnvelope` records. `TTFT`, `TPOT`, `ITL`, queue, and
+E2E latency are separate semantics. Goodput is derived only from request traces
+and an explicit SLO; failures, retries, cache state, token shape, and client
+headroom remain visible. Interpolated points are never default score inputs.
 
 Scalar LWI is a convenience layer. When multiple eligible records share one
-context, `lwi pareto FILE... --profile PROFILE` exposes reusable raw-dimension
-dominance flags. It refuses incompatible contexts.
+context, `lwi pareto FILE... --profile PROFILE` exposes reusable dominance flags
+over quality utilities and normalized resource ratios. It refuses incompatible
+contexts.
 
 ## Reproducibility and security
 
@@ -182,6 +190,14 @@ See [`docs/reproducibility.md`](docs/reproducibility.md),
 [`docs/security-model.md`](docs/security-model.md), and
 [`docs/threats-to-validity.md`](docs/threats-to-validity.md) before treating a
 number as evidence.
+
+The repository has no live load generator. `LiveBenchmarkPolicy` and
+`schemas/live-benchmark.schema.json` are default-deny declarative preflight
+contracts only. They cannot execute a shell command, Python expression, or
+network request. External artifacts use explicit field mappings with source
+tool/version and a separately classified raw artifact digest; a claimed
+external digest is not a locally verified raw digest. Similar metric names are
+not semantic proof.
 
 ## Prior art and independence
 

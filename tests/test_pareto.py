@@ -1,7 +1,9 @@
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 
+from llm_weissman.cli import _pareto_values
 from llm_weissman.errors import InputError
 from llm_weissman.pareto import ParetoPoint, pareto_dominated
 
@@ -41,6 +43,18 @@ def test_normalized_resource_ratio_treats_larger_as_better() -> None:
     assert pareto_dominated([fast, slow]) == {"fast": False, "slow": True}
 
 
+def test_pareto_quality_and_resource_dimensions_are_namespaced() -> None:
+    evaluation = SimpleNamespace(
+        quality=SimpleNamespace(candidate_utilities={"task_accuracy": Decimal("1")}),
+        resource_ratios={"quality:task_accuracy": Decimal("2")},
+    )
+
+    assert _pareto_values(evaluation) == {
+        "quality:task_accuracy": Decimal("1"),
+        "resource:quality:task_accuracy": Decimal("2"),
+    }
+
+
 def test_incompatible_contexts_are_rejected() -> None:
     other = ParetoPoint(
         "b",
@@ -50,3 +64,32 @@ def test_incompatible_contexts_are_rejected() -> None:
     )
     with pytest.raises(InputError, match="contexts"):
         pareto_dominated([_point("a", "1", "0.9"), other])
+
+
+@pytest.mark.parametrize("value", [Decimal("NaN"), Decimal("Infinity")])
+def test_nonfinite_pareto_values_are_rejected(value: Decimal) -> None:
+    point = ParetoPoint(
+        "bad",
+        "sha256:context",
+        {"latency": value},
+        {"latency": "lower_is_better"},
+    )
+    with pytest.raises(InputError, match="finite|decimal"):
+        pareto_dominated([point])
+
+
+def test_invalid_direction_is_rejected_even_for_singleton() -> None:
+    point = ParetoPoint(
+        "bad",
+        "sha256:context",
+        {"latency": Decimal("1")},
+        {"latency": "unknown"},
+    )
+    with pytest.raises(InputError, match="direction"):
+        pareto_dominated([point])
+
+
+def test_empty_pareto_dimensions_are_rejected() -> None:
+    point = ParetoPoint("empty", "sha256:context", {}, {})
+    with pytest.raises(InputError, match="dimension"):
+        pareto_dominated([point])

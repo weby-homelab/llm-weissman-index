@@ -2,8 +2,8 @@ cff-version: 1.2.0
 message: "If LWI contributes to your work, cite the software and the exact release."
 title: "LLM Weissman Index"
 type: software
-version: "0.1.0"
-date-released: "2026-09-25"
+version: "0.2.0"
+date-released: "2026-09-27"
 authors:
   - name: "Weby Homelab"
 repository-code: "https://github.com/weby-homelab/llm-weissman-index"

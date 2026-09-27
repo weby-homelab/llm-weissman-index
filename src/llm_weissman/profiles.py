@@ -336,6 +336,12 @@ class Profile:
             raise InputError(
                 "profile metric IDs must be unique", code="DUPLICATE_METRIC_ID", path=path
             )
+        if "quality" in quality_ids or "quality" in metric_ids:
+            raise InputError(
+                "the metric ID 'quality' is reserved for the quality aggregate",
+                code="RESERVED_METRIC_ID",
+                path=path,
+            )
         if set(metric_weight_data) != set(metric_ids):
             raise InputError(
                 "weights.metrics must match metric definitions", code="INVALID_WEIGHTS", path=path
