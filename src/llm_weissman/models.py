@@ -42,7 +42,7 @@ _SENSITIVE_QUERY_NAMES = {
 }
 _CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f]")
 _URL_REFERENCE = re.compile(r"(?i)^(?:[a-z][a-z0-9+.-]*:)?//")
-_URL_USERINFO = re.compile(r"(?i)((?:[a-z][a-z0-9+.-]*://)|//)(?:[^/\s?#]|[\x00-\x1f\x7f])*@")
+_URL_USERINFO = re.compile(r"(?i)((?:[a-z][a-z0-9+.-]*://)|//)[^/#?@]*@")
 _SENSITIVE_ASSIGNMENT = re.compile(
     r"(?ix)"
     r"([\"']?\b(?:authorization|proxy-authorization|key|access[_-]?key|"
