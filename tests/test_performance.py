@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from decimal import Decimal
 
 import pytest
@@ -162,6 +163,33 @@ def test_operating_envelope_uses_only_observed_goodput() -> None:
     )
     assert envelope.max_observed_goodput() == Decimal("8")
     assert "INTERPOLATED_POINT_NOT_FOR_DEFAULT_SCORING" in validate_envelope_adequacy(envelope)
+
+
+def test_performance_public_identifiers_are_redacted() -> None:
+    trace = _trace("credential=trace-secret")
+    point = OperatingPoint.from_dict(_point("credential=point-secret"), path="point")
+    envelope = OperatingEnvelope.from_dict(
+        {
+            "protocol_id": "credential=protocol-secret",
+            "protocol_version": "Authorization: Basic version-secret",
+            "scenario": "open_loop",
+            "points": [_point("credential=envelope-point-secret")],
+        }
+    )
+
+    rendered = json.dumps(
+        {"trace": trace.to_dict(), "point": point.to_dict(), "envelope": envelope.to_dict()}
+    )
+
+    for secret in (
+        "trace-secret",
+        "point-secret",
+        "protocol-secret",
+        "version-secret",
+        "envelope-point-secret",
+    ):
+        assert secret not in rendered
+    assert "[REDACTED]" in rendered
 
 
 def test_envelope_rejects_mixed_scenarios_and_bad_accounting() -> None:

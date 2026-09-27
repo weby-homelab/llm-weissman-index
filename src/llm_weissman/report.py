@@ -145,8 +145,8 @@ def render_report(evaluation: Evaluation, comparison: ComparisonInput, profile: 
         f"workload: {workload_id} @ {workload_revision}",
         f"benchmark revision: {benchmark_revision}",
         f"protocol: {protocol_id} v{protocol_version}",
-        f"profile: {profile.profile_id} v{profile.version}",
-        f"profile digest: {profile.digest}",
+        f"profile: {redact_untrusted(profile.profile_id)} v{redact_untrusted(profile.version)}",
+        f"profile digest: {redact_untrusted(profile.digest)}",
         f"comparison context ID: {evaluation.context_id}",
         f"status: {evaluation.status}",
         f"uncertainty status: {evaluation.uncertainty_status}",
@@ -166,7 +166,10 @@ def render_report(evaluation: Evaluation, comparison: ComparisonInput, profile: 
             ("baseline", comparison.baseline),
         ):
             for observation in system.quality:
-                lines.append(f"    {label} {observation.metric_id}: {observation.raw.to_dict()}")
+                lines.append(
+                    f"    {label} {redact_untrusted(observation.metric_id)}: "
+                    f"{observation.raw.to_dict()}"
+                )
         lines.append(
             f"  retention: {_human_decimal(evaluation.quality.retention)} "
             f"(candidate aggregate {_human_decimal(evaluation.quality.candidate_aggregate)}, "
@@ -175,7 +178,7 @@ def render_report(evaluation: Evaluation, comparison: ComparisonInput, profile: 
         lines.append(f"  ratio: {_human_decimal(evaluation.quality.quality_ratio)}")
         for metric_id in sorted(evaluation.quality.candidate_utilities):
             lines.append(
-                f"  {metric_id}: candidate "
+                f"  {redact_untrusted(metric_id)}: candidate "
                 f"{_human_decimal(evaluation.quality.candidate_utilities[metric_id])}; "
                 f"baseline {_human_decimal(evaluation.quality.baseline_utilities[metric_id])}"
             )
@@ -183,7 +186,7 @@ def render_report(evaluation: Evaluation, comparison: ComparisonInput, profile: 
     lines.append("Resource ratios")
     if evaluation.resource_ratios:
         for metric_id, ratio in evaluation.resource_ratios.items():
-            lines.append(f"  {metric_id}: {_human_decimal(ratio)}")
+            lines.append(f"  {redact_untrusted(metric_id)}: {_human_decimal(ratio)}")
     else:
         lines.append("  unavailable")
     lines.append("")
@@ -191,7 +194,7 @@ def render_report(evaluation: Evaluation, comparison: ComparisonInput, profile: 
     if evaluation.contributions:
         for dimension, values in sorted(evaluation.contributions.items()):
             lines.append(
-                f"  {dimension}: ratio {_human_decimal(values['ratio'])}; "
+                f"  {redact_untrusted(dimension)}: ratio {_human_decimal(values['ratio'])}; "
                 f"weight {_human_decimal(values['weight'])}; "
                 f"weight*ln(ratio) {_human_decimal(values['log_contribution'])}"
             )
@@ -222,7 +225,7 @@ def render_report(evaluation: Evaluation, comparison: ComparisonInput, profile: 
     if evaluation.raw_metrics:
         for metric_id, values in evaluation.raw_metrics.items():
             lines.append(
-                f"  {metric_id}: candidate {values['candidate']} -> "
+                f"  {redact_untrusted(metric_id)}: candidate {values['candidate']} -> "
                 f"{values['candidate_canonical']} "
                 f"{values['canonical_unit']}; baseline {values['baseline']} -> "
                 f"{values['baseline_canonical']} {values['canonical_unit']}"
@@ -232,7 +235,9 @@ def render_report(evaluation: Evaluation, comparison: ComparisonInput, profile: 
     lines.append("")
     lines.append("Provenance")
     for label, system in (("candidate", comparison.candidate), ("baseline", comparison.baseline)):
-        classes = ", ".join(sorted({item.evidence_class for item in system.provenance}))
+        classes = ", ".join(
+            sorted({str(redact_untrusted(item.evidence_class)) for item in system.provenance})
+        )
         lines.append(f"  {label}: {classes}")
         for item in system.provenance:
             safe_record = item.to_dict()
@@ -251,7 +256,7 @@ def render_report(evaluation: Evaluation, comparison: ComparisonInput, profile: 
         lines.append("")
         lines.append("Issues")
         for issue in evaluation.issues:
-            lines.append(f"  [{issue.severity}] {issue.code}: {issue.message}")
+            lines.append(f"  [{issue.severity}] {issue.code}: {redact_untrusted(issue.message)}")
     lines.append("")
     lines.append(f"result digest: {evaluation.result_digest}")
     return "\n".join(lines) + "\n"

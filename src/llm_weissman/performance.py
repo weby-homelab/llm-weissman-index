@@ -20,7 +20,7 @@ SCENARIOS = frozenset({"offline", "open_loop", "closed_loop"})
 CACHE_STATES = frozenset({"cold", "warm", "controlled", "unknown"})
 LATENCY_SEMANTICS = frozenset({"ttft", "tpot", "itl", "e2e", "queue"})
 POINT_KINDS = frozenset({"observed", "derived", "interpolated"})
-_CONTROL_CHARACTERS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+_CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f]")
 
 
 def _mapping(value: Any, *, path: str) -> dict[str, Any]:
@@ -169,7 +169,7 @@ class RequestTrace:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "request_id": self.request_id,
+            "request_id": redact_untrusted(self.request_id),
             "success": self.success,
             "timed_out": self.timed_out,
             "retry_count": self.retry_count,
@@ -439,18 +439,18 @@ class OperatingPoint:
 
     def to_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {
-            "point_id": self.point_id,
-            "scenario": self.scenario,
+            "point_id": redact_untrusted(self.point_id),
+            "scenario": redact_untrusted(self.scenario),
             "measurement_duration": self.measurement_duration.to_dict(),
             "attempted_count": self.attempted_count,
             "successful_count": self.successful_count,
             "failed_count": self.failed_count,
             "timed_out_count": self.timed_out_count,
             "retry_count": self.retry_count,
-            "cache_state": self.cache_state,
+            "cache_state": redact_untrusted(self.cache_state),
             "workload": redact_untrusted(dict(self.workload)),
             "provenance": redact_untrusted(dict(self.provenance)),
-            "point_kind": self.point_kind,
+            "point_kind": redact_untrusted(self.point_kind),
         }
         for name in ("load_target", "achieved_load", "throughput", "goodput"):
             value = getattr(self, name)
@@ -555,13 +555,13 @@ class OperatingEnvelope:
 
     def to_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {
-            "protocol_id": self.protocol_id,
-            "protocol_version": self.protocol_version,
-            "scenario": self.scenario,
+            "protocol_id": redact_untrusted(self.protocol_id),
+            "protocol_version": redact_untrusted(self.protocol_version),
+            "scenario": redact_untrusted(self.scenario),
             "points": [point.to_dict() for point in self.points],
         }
         if self.adequacy_method is not None:
-            result["adequacy_method"] = self.adequacy_method
+            result["adequacy_method"] = redact_untrusted(self.adequacy_method)
         if self.minimum_observed_points is not None:
             result["minimum_observed_points"] = self.minimum_observed_points
         return result

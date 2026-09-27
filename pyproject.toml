@@ -31,7 +31,7 @@ lwi = "llm_weissman.cli:main"
 dev = [
     "jsonschema>=4.25,<5",
     "pytest>=8.4,<10",
-    "ruff>=0.12,<0.14",
+    "ruff>=0.12,<0.17",
 ]
 
 [tool.uv]

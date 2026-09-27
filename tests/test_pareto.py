@@ -1,7 +1,9 @@
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 
+from llm_weissman.cli import _pareto_values
 from llm_weissman.errors import InputError
 from llm_weissman.pareto import ParetoPoint, pareto_dominated
 
@@ -39,6 +41,18 @@ def test_normalized_resource_ratio_treats_larger_as_better() -> None:
         {"latency": "higher_is_better", "quality": "higher_is_better"},
     )
     assert pareto_dominated([fast, slow]) == {"fast": False, "slow": True}
+
+
+def test_pareto_quality_and_resource_dimensions_are_namespaced() -> None:
+    evaluation = SimpleNamespace(
+        quality=SimpleNamespace(candidate_utilities={"task_accuracy": Decimal("1")}),
+        resource_ratios={"quality:task_accuracy": Decimal("2")},
+    )
+
+    assert _pareto_values(evaluation) == {
+        "quality:task_accuracy": Decimal("1"),
+        "resource:quality:task_accuracy": Decimal("2"),
+    }
 
 
 def test_incompatible_contexts_are_rejected() -> None:

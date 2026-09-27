@@ -53,10 +53,10 @@ class ImportedMetrics:
             "field_mapping": redact_untrusted(
                 {name: dict(mapping) for name, mapping in sorted(self.field_mapping.items())}
             ),
-            "metrics": {
-                name: measurement.to_dict() for name, measurement in sorted(self.metrics.items())
-            },
-            "unknown_fields": list(self.unknown_fields),
+            "metrics": redact_untrusted(
+                {name: measurement.to_dict() for name, measurement in sorted(self.metrics.items())}
+            ),
+            "unknown_fields": redact_untrusted(list(self.unknown_fields)),
         }
 
 

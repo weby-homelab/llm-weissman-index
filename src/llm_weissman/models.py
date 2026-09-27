@@ -21,6 +21,8 @@ _SENSITIVE_QUERY_NAMES = {
     "client_secret",
     "cookie",
     "cookies",
+    "credential",
+    "credentials",
     "csrf",
     "csrf_token",
     "csrfmiddlewaretoken",
@@ -38,11 +40,21 @@ _SENSITIVE_QUERY_NAMES = {
     "xsrf",
     "xsrf_token",
 }
-_CONTROL_CHARACTERS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+_CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f]")
+_URL_SCHEME = re.compile(r"(?i)^[a-z][a-z0-9+.-]*://")
+_URL_USERINFO = re.compile(r"(?i)(\b[a-z][a-z0-9+.-]*://)(?:[^/\s?#]|[\x00-\x1f\x7f])*@")
+_SENSITIVE_ASSIGNMENT = re.compile(
+    r"(?ix)"
+    r"([\"']?\b(?:authorization|proxy-authorization|key|access[_-]?key|"
+    r"private[_-]?key|api[_-]?key|[a-z0-9_-]*(?:token|secret|password|auth|"
+    r"credential|signature|sig|cookie|session|csrf|xsrf)[a-z0-9_-]*)"
+    r"[\"']?\s*[:=]\s*)"
+    r"(?:\"(?:\\.|[^\"\\\r\n])*\"|'(?:\\.|[^'\\\r\n])*'|[^,\n;&}]+)"
+)
 
 
 def _normalise_key(value: str) -> str:
-    snake_case = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", value)
+    snake_case = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", value.strip())
     return snake_case.replace("-", "_").lower()
 
 
@@ -54,23 +66,25 @@ def _escape_control_characters(value: str) -> str:
 
 
 def _redact_text(value: str) -> str:
+    redacted = _URL_USERINFO.sub(r"\1[REDACTED]@", value)
     redacted = re.sub(
         r"(?i)(\b(?:authorization|proxy-authorization)\s*[=:]\s*)"
         r"(?:[a-z]+\s+)?[^\s,;&]+",
         r"\1[REDACTED]",
-        value,
+        redacted,
     )
     redacted = re.sub(
-        r"(?i)(bearer\s+|(?:[a-z0-9_-]*(?:api[_-]?key|token|secret|password|auth|signature|sig|cookie|session|csrf|xsrf)[a-z0-9_-]*)\s*[=:]\s*)[^\s,;&]+",
+        r"(?i)(bearer\s+|(?:[a-z0-9_-]*(?:api[_-]?key|token|secret|password|auth|credential|signature|sig|cookie|session|csrf|xsrf)[a-z0-9_-]*)\s*[=:]\s*)[^\s,;&]+",
         r"\1[REDACTED]",
         redacted,
     )
+    redacted = _SENSITIVE_ASSIGNMENT.sub(r"\1[REDACTED]", redacted)
     return _escape_control_characters(redacted)
 
 
 def _redact_url(value: str) -> str:
     try:
-        parsed = urlsplit(value)
+        parsed = urlsplit(value.strip())
         hostname = parsed.hostname or ""
         port = ""
         try:
@@ -92,6 +106,7 @@ def _redact_url(value: str) -> str:
                         for marker in (
                             "token",
                             "secret",
+                            "credential",
                             "auth",
                             "key",
                             "password",
@@ -110,19 +125,18 @@ def _redact_url(value: str) -> str:
         # Tokens embedded as key=value segments in the URL path are not
         # query parameters, but they leak the same way; redact them too.
         safe_path = _redact_text(unquote(parsed.path))
-        return urlunsplit(
-            (parsed.scheme, netloc, safe_path, query, _redact_text(unquote(parsed.fragment)))
+        return _escape_control_characters(
+            urlunsplit(
+                (parsed.scheme, netloc, safe_path, query, _redact_text(unquote(parsed.fragment)))
+            )
         )
     except ValueError:
         return "[REDACTED_INVALID_URL]"
 
 
 def _redact_source(value: str) -> str:
-    return (
-        _redact_url(value)
-        if value.strip().lower().startswith(("http://", "https://"))
-        else _redact_text(value)
-    )
+    stripped = value.strip()
+    return _redact_url(stripped) if _URL_SCHEME.match(stripped) else _redact_text(value)
 
 
 def redact_untrusted(value: Any) -> Any:
@@ -149,6 +163,14 @@ def redact_untrusted(value: Any) -> Any:
             return True
         return (
             lowered in {"authorization", "auth_token", "api_token", "access_token", "refresh_token"}
+            or bool(
+                re.search(
+                    r"(?:^|_)(?:authorization|auth|token|secret|password|credential|"
+                    r"signature|sig|cookie|session|csrf|xsrf|key)(?:_|$)",
+                    lowered,
+                )
+            )
+            or lowered.endswith(("authorization", "apikey", "accesskey", "privatekey", "secretkey"))
             or lowered.endswith(
                 (
                     "_secret",
@@ -166,11 +188,27 @@ def redact_untrusted(value: Any) -> Any:
             )
         )
 
+    def redact_mapping(data: dict[Any, Any]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, item in data.items():
+            raw_key = str(key)
+            normalized_key = _normalise_key(raw_key)
+            key_is_sensitive = sensitive_key(raw_key) or _redact_source(raw_key) != raw_key
+            value_is_sensitive = key_is_sensitive or (
+                normalized_key in legitimate_token_fields
+                and (isinstance(item, bool) or not isinstance(item, int))
+            )
+            safe_key = "[REDACTED]" if key_is_sensitive else _redact_source(raw_key)
+            if safe_key in result:
+                suffix = 2
+                while f"{safe_key}#{suffix}" in result:
+                    suffix += 1
+                safe_key = f"{safe_key}#{suffix}"
+            result[safe_key] = "[REDACTED]" if value_is_sensitive else redact_untrusted(item)
+        return result
+
     if isinstance(value, dict):
-        return {
-            str(key): "[REDACTED]" if sensitive_key(str(key)) else redact_untrusted(item)
-            for key, item in value.items()
-        }
+        return redact_mapping(value)
     if isinstance(value, (list, tuple)):
         return [redact_untrusted(item) for item in value]
     if isinstance(value, str):
@@ -397,8 +435,8 @@ class Measurement:
     def to_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {
             "value": decimal_string(self.value),
-            "unit": self.unit,
-            "statistic": self.statistic,
+            "unit": _redact_source(self.unit),
+            "statistic": _redact_source(self.statistic),
         }
         if self.sample_count is not None:
             result["sample_count"] = self.sample_count
@@ -409,7 +447,7 @@ class Measurement:
         if self.upper_bound is not None:
             result["upper_bound"] = decimal_string(self.upper_bound)
         if self.method is not None:
-            result["method"] = _redact_text(self.method)
+            result["method"] = _redact_source(self.method)
         if self.seed is not None:
             result["seed"] = self.seed
         return result
@@ -432,7 +470,7 @@ class QualityObservation:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {"metric_id": self.metric_id, "raw": self.raw.to_dict()}
+        return {"metric_id": _redact_source(self.metric_id), "raw": self.raw.to_dict()}
 
 
 @dataclass(frozen=True)
@@ -469,9 +507,9 @@ class ParameterObservation:
         result = self.measurement.to_dict()
         result.update(
             {
-                "semantics": self.semantics,
+                "semantics": _redact_source(self.semantics),
                 "source": _redact_source(self.source),
-                "method": _redact_text(self.method),
+                "method": _redact_source(self.method),
             }
         )
         return result
@@ -552,10 +590,10 @@ class ProvenanceRecord:
 
     def to_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {
-            "evidence_class": _redact_text(self.evidence_class),
-            "source_type": _redact_text(self.source_type),
-            "claim_scope": _redact_text(self.claim_scope),
-            "retrieved_at": _redact_text(self.retrieved_at),
+            "evidence_class": _redact_source(self.evidence_class),
+            "source_type": _redact_source(self.source_type),
+            "claim_scope": _redact_source(self.claim_scope),
+            "retrieved_at": _redact_source(self.retrieved_at),
         }
         for name in (
             "source_url",
@@ -581,9 +619,9 @@ class ProvenanceRecord:
                     "model_revision",
                     "benchmark_revision",
                 }:
-                    result[name] = _redact_text(value)
+                    result[name] = _redact_source(value)
                 else:
-                    result[name] = _redact_text(value)
+                    result[name] = _redact_source(value)
         return result
 
 
@@ -732,10 +770,8 @@ class CostMetadata:
 
     def to_dict(self) -> dict[str, Any]:
         result = {
-            "pricing_timestamp": self.pricing_timestamp,
-            "pricing_source": _redact_url(self.pricing_source)
-            if self.pricing_source.startswith(("http://", "https://"))
-            else _redact_text(self.pricing_source),
+            "pricing_timestamp": _redact_source(self.pricing_timestamp),
+            "pricing_source": _redact_source(self.pricing_source),
             "input_token_count": self.input_token_count,
             "output_token_count": self.output_token_count,
             "cached_token_count": self.cached_token_count,
@@ -748,7 +784,7 @@ class CostMetadata:
         if self.attempted_request_count is not None:
             result["attempted_request_count"] = self.attempted_request_count
         if self.currency is not None:
-            result["currency"] = _redact_text(self.currency)
+            result["currency"] = _redact_source(self.currency)
         if self.total_charge is not None:
             result["total_charge"] = decimal_string(self.total_charge)
         return result
@@ -888,10 +924,12 @@ class SystemRecord:
 
     def to_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {
-            "id": self.id,
-            "revision": self.revision,
+            "id": _redact_source(self.id),
+            "revision": _redact_source(self.revision),
             "quality": [item.to_dict() for item in self.quality],
-            "metrics": {name: self.metrics[name].to_dict() for name in sorted(self.metrics)},
+            "metrics": redact_untrusted(
+                {name: self.metrics[name].to_dict() for name in sorted(self.metrics)}
+            ),
             "parameters": {
                 "status": self.parameter_status,
                 **{name: self.parameters[name].to_dict() for name in sorted(self.parameters)},
@@ -971,8 +1009,8 @@ class ComparisonInput:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "spec_version": self.spec_version,
-            "schema_version": self.schema_version,
+            "spec_version": redact_untrusted(self.spec_version),
+            "schema_version": redact_untrusted(self.schema_version),
             "candidate": self.candidate.to_dict(),
             "baseline": self.baseline.to_dict(),
             "workload": redact_untrusted(dict(self.workload)),

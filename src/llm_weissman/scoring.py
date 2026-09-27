@@ -77,8 +77,8 @@ class Evaluation:
 
     def to_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {
-            "spec_version": self.spec_version,
-            "schema_version": self.schema_version,
+            "spec_version": redact_untrusted(self.spec_version),
+            "schema_version": redact_untrusted(self.schema_version),
             "status": self.status,
             "reason": self.reason,
             "candidate": redact_untrusted(
@@ -100,16 +100,16 @@ class Evaluation:
                 }
             ),
             "profile": {
-                "id": self.profile_id,
-                "version": self.profile_version,
-                "digest": self.profile_digest,
+                "id": redact_untrusted(self.profile_id),
+                "version": redact_untrusted(self.profile_version),
+                "digest": redact_untrusted(self.profile_digest),
             },
             "comparison_context_id": self.context_id,
             "lwi": decimal_string(self.lwi) if self.lwi is not None else None,
             "quality": self.quality.to_dict() if self.quality is not None else None,
-            "resource_ratios": {
-                key: decimal_string(value) for key, value in self.resource_ratios.items()
-            },
+            "resource_ratios": redact_untrusted(
+                {key: decimal_string(value) for key, value in self.resource_ratios.items()}
+            ),
             "raw_metrics": redact_untrusted(self.raw_metrics),
             "quality_gate": redact_untrusted(self.quality_gate),
             "contributions": _serialize_contributions(self.contributions),
@@ -424,13 +424,14 @@ def _log_contributions(
 def _serialize_contributions(
     contributions: dict[str, dict[str, Any]],
 ) -> dict[str, dict[str, str | None]]:
-    return {
+    serialized = {
         dimension: {
             key: decimal_string(value) if isinstance(value, Decimal) else value
             for key, value in values.items()
         }
         for dimension, values in sorted(contributions.items())
     }
+    return redact_untrusted(serialized)
 
 
 def _uncertainty_status(comparison: ComparisonInput) -> str:

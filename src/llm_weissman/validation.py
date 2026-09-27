@@ -9,7 +9,7 @@ from typing import Any
 import yaml
 
 from .errors import InputError
-from .models import ComparisonInput, Measurement, SystemRecord
+from .models import ComparisonInput, Measurement, SystemRecord, redact_untrusted
 from .performance import CACHE_STATES, SCENARIOS, OperatingEnvelope, validate_envelope_adequacy
 from .profiles import MetricDefinition, Profile
 from .provenance import provenance_issues
@@ -34,8 +34,8 @@ class ValidationIssue:
         return {
             "code": self.code,
             "severity": self.severity,
-            "message": self.message,
-            "path": self.path,
+            "message": redact_untrusted(self.message),
+            "path": redact_untrusted(self.path),
         }
 
 

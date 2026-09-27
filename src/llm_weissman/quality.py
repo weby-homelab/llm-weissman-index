@@ -7,7 +7,7 @@ from decimal import Decimal, localcontext
 from typing import Any
 
 from .errors import InputError
-from .models import QualityObservation
+from .models import QualityObservation, redact_untrusted
 from .profiles import QualityDefinition
 from .units import DECIMAL_WORKING_PRECISION, convert, decimal_string
 
@@ -24,12 +24,12 @@ class QualityResult:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "candidate_utilities": {
-                key: decimal_string(value) for key, value in self.candidate_utilities.items()
-            },
-            "baseline_utilities": {
-                key: decimal_string(value) for key, value in self.baseline_utilities.items()
-            },
+            "candidate_utilities": redact_untrusted(
+                {key: decimal_string(value) for key, value in self.candidate_utilities.items()}
+            ),
+            "baseline_utilities": redact_untrusted(
+                {key: decimal_string(value) for key, value in self.baseline_utilities.items()}
+            ),
             "quality_ratio": decimal_string(self.quality_ratio),
             "candidate_aggregate": decimal_string(self.candidate_aggregate),
             "baseline_aggregate": decimal_string(self.baseline_aggregate),
