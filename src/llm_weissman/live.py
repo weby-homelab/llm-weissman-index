@@ -8,6 +8,7 @@ Python from an input file.
 from __future__ import annotations
 
 import re
+import socket
 from collections.abc import Mapping
 from contextlib import suppress
 from dataclasses import dataclass
@@ -94,6 +95,34 @@ def _validate_target(value: Any, *, path: str) -> str:
             path=path,
         )
     return target
+
+
+def _assert_public_resolution(hostname: str, *, path: str) -> None:
+    try:
+        resolved = socket.getaddrinfo(hostname, None, type=socket.SOCK_STREAM)
+    except OSError as exc:
+        raise InputError(
+            "live targets must resolve to public addresses",
+            code="UNSAFE_TARGET",
+            path=path,
+        ) from exc
+
+    addresses = []
+    for result in resolved:
+        try:
+            addresses.append(ip_address(result[4][0]))
+        except (IndexError, ValueError) as exc:
+            raise InputError(
+                "live targets must resolve to valid public addresses",
+                code="UNSAFE_TARGET",
+                path=path,
+            ) from exc
+    if not addresses or any(not address.is_global for address in addresses):
+        raise InputError(
+            "live targets must resolve only to public addresses",
+            code="UNSAFE_TARGET",
+            path=path,
+        )
 
 
 @dataclass(frozen=True)
@@ -286,6 +315,8 @@ class LiveBenchmarkPolicy:
             raise InputError(
                 "target is not in the live allowlist", code="TARGET_NOT_ALLOWLISTED", path="target"
             )
+        parsed_target = urlsplit(target)
+        _assert_public_resolution(parsed_target.hostname or "", path="target")
         return redact_untrusted(
             {
                 "policy_version": self.policy_version,

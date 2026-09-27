@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/weby-homelab/llm-weissman-index/blob/main/schemas/live-benchmark.schema.json",
+  "$comment": "Schema validation is syntactic. Explicit activation must also pass LiveBenchmarkPolicy.dry_run, which resolves every target address and rejects non-global results.",
   "title": "LWI Live Benchmark Safety Policy",
   "type": "object",
   "additionalProperties": false,
@@ -28,7 +29,29 @@
         "type": "string",
         "format": "uri",
         "pattern": "^https://",
-        "not": {"pattern": "^https://[^/]*@"}
+        "not": {"pattern": "^https://[^/]*@"},
+        "allOf": [
+          {
+            "not": {
+              "pattern": "^https://[0-9]+(?:\\.[0-9]+)*(?:\\.)?(?::[0-9]+)?(?:[/?#]|$)"
+            }
+          },
+          {
+            "not": {
+              "pattern": "^https://\\[[^\\]]+\\](?::[0-9]+)?(?:[/?#]|$)"
+            }
+          },
+          {
+            "not": {
+              "pattern": "^https://0[xX][0-9A-Fa-f]+(?:\\.)?(?::[0-9]+)?(?:[/?#]|$)"
+            }
+          },
+          {
+            "not": {
+              "pattern": "^https://(?:[^/?#]+\\.)?[Ll][Oo][Cc][Aa][Ll][Hh][Oo][Ss][Tt](?:\\.)?(?::[0-9]+)?(?:[/?#]|$)"
+            }
+          }
+        ]
       }
     },
     "authorization_statement": {"type": "string", "minLength": 1},

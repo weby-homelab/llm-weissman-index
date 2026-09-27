@@ -442,6 +442,12 @@ def test_embedded_url_userinfo_with_control_characters_is_redacted() -> None:
     assert "[REDACTED]" in rendered
 
 
+def test_scheme_relative_url_userinfo_is_redacted() -> None:
+    rendered = str(redact_untrusted({"source": "//user:scheme-relative-secret@example.org/card"}))
+    assert "scheme-relative-secret" not in rendered
+    assert "[REDACTED]" in rendered
+
+
 def test_comparison_scalar_metadata_is_redacted_in_public_dict() -> None:
     root = Path(__file__).parents[1]
     data = load_data_file(root / "examples" / "synthetic" / "comparison.yaml")

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import socket
 from dataclasses import replace
 from decimal import Decimal
 
@@ -29,7 +30,14 @@ def _policy(**changes: object) -> dict[str, object]:
     return value
 
 
-def test_live_policy_is_default_deny_and_dry_run_never_executes() -> None:
+def test_live_policy_is_default_deny_and_dry_run_never_executes(monkeypatch) -> None:
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        lambda *args, **kwargs: [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))
+        ],
+    )
     policy = LiveBenchmarkPolicy.from_dict(_policy())
     with pytest.raises(InputError, match="explicit activation"):
         policy.dry_run(target="https://authorized.example.test/v1/generate")
@@ -62,6 +70,35 @@ def test_live_policy_rejects_unallowlisted_target_and_disabled_policy() -> None:
     disabled = LiveBenchmarkPolicy.from_dict(_policy(enabled=False))
     with pytest.raises(InputError, match="disabled"):
         disabled.dry_run(target="https://authorized.example.test/v1/generate", activate=True)
+
+
+def test_live_policy_rejects_private_dns_results_on_explicit_activation(monkeypatch) -> None:
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        lambda *args, **kwargs: [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.0.0.7", 443)),
+            (socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("2001:db8::7", 443, 0, 0)),
+        ],
+    )
+    policy = LiveBenchmarkPolicy.from_dict(_policy())
+
+    with pytest.raises(InputError, match="public address"):
+        policy.dry_run(target="https://authorized.example.test/v1/generate", activate=True)
+
+
+def test_live_policy_rejects_empty_or_failed_dns_resolution(monkeypatch) -> None:
+    policy = LiveBenchmarkPolicy.from_dict(_policy())
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *args, **kwargs: [])
+    with pytest.raises(InputError, match="public addresses"):
+        policy.dry_run(target="https://authorized.example.test/v1/generate", activate=True)
+
+    def fail_resolution(*args, **kwargs):
+        raise socket.gaierror("temporary resolution failure")
+
+    monkeypatch.setattr(socket, "getaddrinfo", fail_resolution)
+    with pytest.raises(InputError, match="public addresses"):
+        policy.dry_run(target="https://authorized.example.test/v1/generate", activate=True)
 
 
 def test_enabled_policy_needs_authorization_statement() -> None:
@@ -129,6 +166,20 @@ def test_live_schema_rejects_zero_caps_credentialed_targets_and_orphan_cost() ->
     bad["target_allowlist"] = ["https://user:pw@example.test/generate"]
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(bad, schema)
+    for target in (
+        "https://127.0.0.1/generate",
+        "https://[::1]/generate",
+        "https://localhost./generate",
+        "https://foo.localhost/generate",
+        "https://LOCALHOST/generate",
+        "https://127.1/generate",
+        "https://2130706433/generate",
+        "https://0x7f000001/generate",
+    ):
+        bad = dict(base)
+        bad["target_allowlist"] = [target]
+        with pytest.raises(jsonschema.ValidationError):
+            jsonschema.validate(bad, schema)
     bad = dict(base)
     del bad["currency"]
     with pytest.raises(jsonschema.ValidationError):

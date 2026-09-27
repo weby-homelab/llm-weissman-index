@@ -24,7 +24,10 @@
   Python expression, module import, environment dump, or credential value can
   be supplied by a benchmark input. Activation requires an exact HTTPS
   allowlist and bounded rate, concurrency, request, duration, timeout,
-  error-rate, and optional cost caps.
+  error-rate, and optional cost caps. Explicit activation resolves every target
+  hostname, fails closed on resolution errors, and rejects any non-global
+  address; it never sends HTTP traffic. A future runner must pin and recheck
+  the approved addresses before connecting.
 - Reports redact credential-like mapping keys, camelCase variants, URL userinfo,
   query tokens, and terminal control characters at the output boundary.
 - Normal CI uses no provider secrets, GPU, live endpoint, or paid judge. Actions

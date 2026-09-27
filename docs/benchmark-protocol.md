@@ -83,4 +83,8 @@ LWI has no live load generator. The declarative `live-benchmark.schema.json`
 and `LiveBenchmarkPolicy` are a default-deny preflight boundary only. A future
 runner must require explicit activation, an exact authorized HTTPS allowlist,
 concurrency/rate/request/duration/timeout/error-rate caps, and an optional
-estimated-cost cap. A URL found in documentation is never authorization.
+estimated-cost cap. The JSON Schema provides syntax checks only; explicit
+activation resolves every target hostname and rejects resolution errors or any
+non-global address without sending HTTP traffic. A future runner must pin and
+recheck the approved addresses before connecting. A URL found in documentation
+is never authorization.

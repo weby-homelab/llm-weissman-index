@@ -41,8 +41,8 @@ _SENSITIVE_QUERY_NAMES = {
     "xsrf_token",
 }
 _CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f]")
-_URL_SCHEME = re.compile(r"(?i)^[a-z][a-z0-9+.-]*://")
-_URL_USERINFO = re.compile(r"(?i)(\b[a-z][a-z0-9+.-]*://)(?:[^/\s?#]|[\x00-\x1f\x7f])*@")
+_URL_REFERENCE = re.compile(r"(?i)^(?:[a-z][a-z0-9+.-]*:)?//")
+_URL_USERINFO = re.compile(r"(?i)((?:[a-z][a-z0-9+.-]*://)|//)(?:[^/\s?#]|[\x00-\x1f\x7f])*@")
 _SENSITIVE_ASSIGNMENT = re.compile(
     r"(?ix)"
     r"([\"']?\b(?:authorization|proxy-authorization|key|access[_-]?key|"
@@ -136,7 +136,7 @@ def _redact_url(value: str) -> str:
 
 def _redact_source(value: str) -> str:
     stripped = value.strip()
-    return _redact_url(stripped) if _URL_SCHEME.match(stripped) else _redact_text(value)
+    return _redact_url(stripped) if _URL_REFERENCE.match(stripped) else _redact_text(value)
 
 
 def redact_untrusted(value: Any) -> Any:
