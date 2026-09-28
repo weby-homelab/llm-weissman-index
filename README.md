@@ -92,7 +92,7 @@ same-context Pareto command. CI build artifacts are a separate release lane,
 not scoring outputs.
 
 ```mermaid
-flowchart LR
+flowchart TB
     accTitle: LLM Weissman Index evaluation pipeline
     accDescr: Preserved candidate and baseline evidence is parsed safely, checked for comparability against an immutable profile, analyzed only after validation, gated for eligibility, and emitted as context-bound reports and digests. Invalid, incomplete, and ineligible records keep diagnostics without a leaderboard score. Pareto is a separate same-context analysis.
 
